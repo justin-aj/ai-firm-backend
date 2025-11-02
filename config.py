@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     dask_scheduler: str = ""  # Dask scheduler address (empty = local cluster)
     dask_workers: int = 4  # Number of Dask workers (for local cluster)
     
+    # Milvus vector database settings
+    milvus_host: str = "localhost"
+    milvus_port: str = "19530"
+    milvus_collection: str = "ai_firm_vectors"
+    
     # Rate limiting (future use)
     rate_limit_per_minute: int = 60
     

@@ -35,11 +35,26 @@ Model Context Protocol (MCP) allows AI assistants like Claude Desktop to directl
 
 ## Available MCP Tools
 
-1. **google_search** - Search the web and get detailed results (title, URL, snippet)
-2. **google_search_urls_only** - Get only URLs from search results
-3. **google_image_search** - Search for images
-4. **lm_studio_chat** - Chat with your local LLM
-5. **lm_studio_completion** - Text completion with your local LLM
+### 1. Search Tools
+- **google_search** - Search the web and get detailed results (title, URL, snippet)
+- **google_search_urls_only** - Get only URLs from search results
+- **google_image_search** - Search for images
+
+### 2. LLM Tools
+- **lm_studio_chat** - Chat with your local LLM
+- **lm_studio_completion** - Text completion with your local LLM
+
+### 3. Web Scraping Tools
+- **scrape_url** - Scrape content from a single URL using Crawl4AI
+- **scrape_urls_batch** - Scrape multiple URLs in parallel with Dask
+
+### 4. Embedding & Vector Search Tools
+- **generate_embedding** - Generate BGE-M3 embeddings (1024-dim) for text
+- **scrape_and_embed** - Complete RAG pipeline: scrape → chunk → embed → store in Milvus
+- **semantic_search** - Search Milvus vector database for semantically similar content
+
+### 5. Advanced Reasoning
+- **sequential_thinking** - Enable step-by-step reasoning for complex tasks
 
 ## Setup Instructions
 
@@ -74,7 +89,9 @@ python run_mcp_server.py
       "env": {
         "GOOGLE_API_KEY": "YOUR_API_KEY",
         "GOOGLE_CX": "YOUR_CX_ID",
-        "LM_STUDIO_BASE_URL": "http://127.0.0.1:1234/v1"
+        "LM_STUDIO_BASE_URL": "http://127.0.0.1:1234/v1",
+        "MILVUS_HOST": "localhost",
+        "MILVUS_PORT": "19530"
       }
     }
   }
@@ -141,6 +158,40 @@ This opens a web interface to test your MCP tools.
 }
 ```
 
+### Example 4: Scrape and Embed for RAG
+**User:** "Scrape these URLs and make them searchable"
+
+**Claude uses:** `scrape_and_embed` tool
+```json
+{
+  "urls": [
+    "https://example.com/article1",
+    "https://example.com/article2"
+  ],
+  "chunk_size": 1000,
+  "chunk_overlap": 200
+}
+```
+
+### Example 5: Semantic Search
+**User:** "Search my stored content for information about Python"
+
+**Claude uses:** `semantic_search` tool
+```json
+{
+  "query": "Python programming best practices",
+  "top_k": 5
+}
+```
+
+### Example 6: Multi-Step RAG Workflow
+**User:** "Scrape these AI news sites, then search for articles about GPT-4"
+
+**Claude performs:**
+1. Uses `scrape_and_embed` to ingest content
+2. Uses `semantic_search` to find relevant articles
+3. Uses `lm_studio_chat` to summarize findings
+
 ## Dual Architecture Benefits
 
 Your app now supports TWO ways to access the same tools:
@@ -176,6 +227,17 @@ Your app now supports TWO ways to access the same tools:
 - Verify it's on port 1234
 - Load a model in LM Studio
 
+### Milvus connection fails
+- Make sure Docker is running
+- Verify Milvus container is running: `docker ps`
+- Start Milvus: `docker run -d --name milvus -p 19530:19530 -p 9091:9091 milvusdb/milvus:latest`
+- Check Milvus logs: `docker logs milvus`
+
+### Embedding/Scraping errors
+- First run may take time to download BGE-M3 model (~2.3GB)
+- Check internet connection for Crawl4AI scraping
+- Verify sufficient disk space for embeddings
+
 ## Security Notes
 
 - Your credentials in `claude_desktop_config.json` are stored locally
@@ -187,9 +249,10 @@ Your app now supports TWO ways to access the same tools:
 
 Once MCP is working:
 1. ✅ Test each tool individually
-2. ✅ Try combining tools (search + LLM analysis)
-3. ✅ Keep REST API for web clients
-4. ✅ Consider adding more MCP tools (web scraping, etc.)
+2. ✅ Try combining tools (search + scrape + embed + semantic search)
+3. ✅ Build RAG workflows (scrape → embed → search → LLM answer)
+4. ✅ Keep REST API for web clients
+5. ✅ Monitor Milvus storage and performance
 
 ## Support
 

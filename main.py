@@ -3,7 +3,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from config import get_settings
-from routes import core_router, lm_studio_router, search_router, sequential_thinking_router, scraper_router
+from routes import (
+    core_router,
+    lm_studio_router,
+    search_router,
+    sequential_thinking_router,
+    scraper_router,
+    embeddings_router
+)
 import logging
 
 # Configure logging
@@ -55,6 +62,7 @@ app.include_router(lm_studio_router, prefix="/lm-studio", tags=["LM Studio"])
 app.include_router(search_router, prefix="/search", tags=["Search"])
 app.include_router(sequential_thinking_router)
 app.include_router(scraper_router)
+app.include_router(embeddings_router, prefix="/embeddings", tags=["Embeddings"])
 
 if __name__ == "__main__":
     import uvicorn

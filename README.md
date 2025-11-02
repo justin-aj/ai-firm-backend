@@ -79,11 +79,26 @@ Once running, visit:
 
 When configured with Claude Desktop, the following tools are available:
 
+### Search & Discovery
 1. **google_search** - Search the web with detailed results
 2. **google_search_urls_only** - Get only URLs
 3. **google_image_search** - Search for images
-4. **lm_studio_chat** - Chat with your local LLM
-5. **lm_studio_completion** - Text completion with local LLM
+
+### Web Scraping
+4. **scrape_url** - Scrape single URL with Crawl4AI
+5. **scrape_urls_batch** - Parallel scraping with Dask
+
+### Embeddings & RAG
+6. **generate_embedding** - BGE-M3 embeddings (1024-dim)
+7. **scrape_and_embed** - Full RAG pipeline (scrape → chunk → embed → store)
+8. **semantic_search** - Search Milvus vector database
+
+### LLM Integration
+9. **lm_studio_chat** - Chat with your local LLM
+10. **lm_studio_completion** - Text completion with local LLM
+
+### Advanced Reasoning
+11. **sequential_thinking** - Multi-step reasoning tool
 
 See `MCP_SETUP.md` for detailed setup instructions.
 
