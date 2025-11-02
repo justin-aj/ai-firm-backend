@@ -1,56 +1,91 @@
 # AI Firm Backend
 
-A FastAPI backend application for AI Firm with LM Studio integration.
+A FastAPI backend application for AI Firm with LM Studio integration, Google Custom Search, and **Dask-powered distributed web scraping**, featuring **Model Context Protocol (MCP)** with **Sequential Thinking** support.
 
 ## Features
 
-- FastAPI REST API
-- LM Studio local LLM integration
-- Chat completions endpoint
-- Text completions endpoint
-- CORS enabled
-- Environment-based configuration
+- **FastAPI REST API** - Traditional HTTP endpoints
+- **Model Context Protocol (MCP)** - Direct tool access for AI assistants
+- **Sequential Thinking Tool** - Multi-step reasoning capabilities
+- **LM Studio Integration** - Local LLM chat and completions
+- **Google Custom Search API** - Web and image search
+- **🆕 Crawl4AI Web Scraping** - Extract content from any URL
+- **🆕 Dask Distributed Scraping** - Scale to 1000s of concurrent scrapes
+- **CORS enabled** - Ready for frontend integration
+- **Security hardened** - Input validation, error handling, logging
 
-## Setup
+## Dual Architecture
 
-1. Create and activate virtual environment:
-```bash
-python -m venv venv
-venv\Scripts\activate  # Windows
-```
+This backend supports **two ways** to access the same tools:
 
-2. Install dependencies:
+### 1. MCP Protocol (for AI Assistants like Claude Desktop)
+- Direct tool invocation
+- Type-safe with JSON Schema
+- Standardized protocol
+- See `MCP_SETUP.md` for configuration
+
+### 2. REST API (for Web/Mobile Apps)
+- Traditional HTTP endpoints
+- Swagger docs at `/docs`
+- Compatible with any HTTP client
+
+## Quick Start
+
+### 1. Install Dependencies
+
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Configure environment:
+### 2. Configure Environment
+
 ```bash
 copy .env.example .env
 ```
 
-Edit `.env` to configure LM Studio settings if needed.
+Edit `.env` with your credentials:
+- `GOOGLE_API_KEY` - Your Google Custom Search API key
+- `GOOGLE_CX` - Your Custom Search Engine ID
 
-4. **Start LM Studio**:
-   - Open LM Studio
-   - Load a model
-   - Start the local server (default port: 1234)
+### 3. Option A: Run FastAPI Server (REST API)
 
-5. Run the application:
 ```bash
 python main.py
 ```
 
-Or use uvicorn with auto-reload:
+Access at: http://localhost:8000
+
+### 4. Option B: Run MCP Server (for Claude Desktop)
+
 ```bash
-uvicorn main:app --reload
+python run_mcp_server.py
 ```
+
+Then configure Claude Desktop - see `MCP_SETUP.md`
+
+### 5. Start LM Studio
+
+- Open LM Studio
+- Load a model
+- Start the local server (port 1234)
 
 ## API Documentation
 
 Once running, visit:
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+
+## MCP Tools (for AI Assistants)
+
+When configured with Claude Desktop, the following tools are available:
+
+1. **google_search** - Search the web with detailed results
+2. **google_search_urls_only** - Get only URLs
+3. **google_image_search** - Search for images
+4. **lm_studio_chat** - Chat with your local LLM
+5. **lm_studio_completion** - Text completion with local LLM
+
+See `MCP_SETUP.md` for detailed setup instructions.
 
 ## Endpoints
 
@@ -104,5 +139,47 @@ Edit `.env` file to configure:
 ## Requirements
 
 - Python 3.8+
-- LM Studio running locally
+- LM Studio (running locally)
+- Google Custom Search API credentials
 - Dependencies listed in requirements.txt
+
+## Documentation
+
+- **`MCP_SETUP.md`** - Complete MCP configuration guide
+- **`SECURITY.md`** - Security best practices
+- **`DEPLOYMENT_CHECKLIST.md`** - Pre-deployment checklist
+
+## Project Structure
+
+```
+ai-firm-backend/
+├── main.py                    # FastAPI application entry point
+├── mcp_server.py             # MCP server with tools
+├── run_mcp_server.py         # MCP server runner
+├── config.py                 # Configuration management
+├── models.py                 # Pydantic models
+├── clients/                  # External service clients
+│   ├── __init__.py
+│   ├── lm_studio_client.py   # LM Studio integration
+│   ├── google_search_client.py # Google Search integration
+│   └── web_scraper_client.py # Crawl4AI web scraper
+├── routes/                   # API route handlers
+│   ├── __init__.py
+│   ├── core.py              # Core endpoints (health, root)
+│   ├── lm_studio.py         # LM Studio endpoints
+│   ├── search.py            # Google Search endpoints
+│   ├── scraper.py           # Web scraping endpoints
+│   └── sequential_thinking.py # Sequential thinking endpoints
+├── tests/                    # Test files
+│   ├── __init__.py
+│   └── test_dask.py         # Dask integration tests
+├── docs/                     # Documentation
+│   ├── MCP_SETUP.md         # MCP configuration guide
+│   ├── SECURITY.md          # Security best practices
+│   ├── DEPLOYMENT_CHECKLIST.md # Deployment guide
+│   ├── DASK_GUIDE.md        # Dask distributed scraping guide
+│   └── MODULARIZATION.md    # Code organization notes
+├── .env                      # Environment variables (local, gitignored)
+├── .env.example              # Environment template
+└── requirements.txt          # Python dependencies
+```

@@ -5,6 +5,7 @@ __pycache__/
 *.so
 .Python
 venv/
+venv_old/
 env/
 ENV/
 .venv
@@ -47,6 +48,5 @@ htmlcov/
 *.sqlite3
 
 # Temporary files
-test_*.py
 temp/
 tmp/

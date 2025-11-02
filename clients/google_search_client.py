@@ -1,5 +1,5 @@
 import requests
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from config import get_settings
 
 
@@ -17,7 +17,7 @@ class GoogleCustomSearchClient:
         query: str,
         num_results: int = 10,
         start: int = 1,
-        **kwargs
+        **kwargs: Any
     ) -> Dict[str, Any]:
         """
         Perform a custom search query
@@ -74,7 +74,7 @@ class GoogleCustomSearchClient:
         query: str,
         num_results: int = 10,
         start: int = 1,
-        **kwargs
+        **kwargs: Any
     ) -> List[str]:
         """
         Perform a search and return only the URLs
@@ -100,7 +100,7 @@ class GoogleCustomSearchClient:
         query: str,
         num_results: int = 10,
         start: int = 1,
-        **kwargs
+        **kwargs: Any
     ) -> List[Dict[str, str]]:
         """
         Perform a search and return detailed results
@@ -135,7 +135,7 @@ class GoogleCustomSearchClient:
         query: str,
         num_results: int = 10,
         start: int = 1,
-        **kwargs
+        **kwargs: Any
     ) -> List[Dict[str, str]]:
         """
         Search for images

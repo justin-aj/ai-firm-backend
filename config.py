@@ -1,6 +1,6 @@
 from pydantic_settings import BaseSettings
 from functools import lru_cache
-from typing import Optional
+from typing import Dict, List
 
 
 class Settings(BaseSettings):
@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     google_api_key: str = ""
     google_cx: str = ""
     
+    # Dask distributed scraping settings
+    use_dask: bool = False  # Disable by default (AsyncIO works great, Dask can have pickling issues)
+    dask_scheduler: str = ""  # Dask scheduler address (empty = local cluster)
+    dask_workers: int = 4  # Number of Dask workers (for local cluster)
+    
     # Rate limiting (future use)
     rate_limit_per_minute: int = 60
     
@@ -24,9 +29,9 @@ class Settings(BaseSettings):
         env_file = ".env"
         case_sensitive = False
         
-    def validate_credentials(self) -> dict:
+    def validate_credentials(self) -> Dict[str, bool | List[str]]:
         """Validate that required credentials are set"""
-        issues = []
+        issues: List[str] = []
         if not self.google_api_key:
             issues.append("GOOGLE_API_KEY not set")
         if not self.google_cx:
