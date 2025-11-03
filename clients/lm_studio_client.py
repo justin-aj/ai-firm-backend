@@ -30,13 +30,14 @@ class LMStudioClient:
         messages: List[Dict[str, str]],
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
-        stream: bool = False
+        stream: bool = False,
+        model: Optional[str] = None
     ) -> Dict[str, Any]:
         """Send a chat completion request to LM Studio"""
         async with httpx.AsyncClient(timeout=120.0) as client:
             try:
                 payload = {
-                    "model": self.model,
+                    "model": model or self.model,
                     "messages": messages,
                     "temperature": temperature,
                     "stream": stream
@@ -48,6 +49,13 @@ class LMStudioClient:
                     f"{self.base_url}/chat/completions",
                     json=payload
                 )
+                
+                # Log response for debugging
+                if response.status_code != 200:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"LM Studio error {response.status_code}: {response.text}")
+                
                 response.raise_for_status()
                 return response.json()
             except httpx.ConnectError:
@@ -61,13 +69,14 @@ class LMStudioClient:
         self,
         prompt: str,
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None
+        max_tokens: Optional[int] = None,
+        model: Optional[str] = None
     ) -> Dict[str, Any]:
         """Send a completion request to LM Studio"""
         async with httpx.AsyncClient(timeout=120.0) as client:
             try:
                 payload = {
-                    "model": self.model,
+                    "model": model or self.model,
                     "prompt": prompt,
                     "temperature": temperature
                 }
@@ -78,6 +87,13 @@ class LMStudioClient:
                     f"{self.base_url}/completions",
                     json=payload
                 )
+                
+                # Log response for debugging
+                if response.status_code != 200:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"LM Studio completions error {response.status_code}: {response.text}")
+                
                 response.raise_for_status()
                 return response.json()
             except httpx.ConnectError:

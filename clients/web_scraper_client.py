@@ -24,17 +24,12 @@ def _scrape_single_url_sync(
     """
     async def _scrape():
         try:
-            from crawl4ai import BrowserConfig, CrawlerRunConfig, DefaultMarkdownGenerator, PruningContentFilter
-            
-            browser_conf = BrowserConfig(headless=True)
-            run_conf = CrawlerRunConfig(
-                markdown_generator=DefaultMarkdownGenerator(
-                    content_filter=PruningContentFilter(min_word_threshold=20)
+            async with AsyncWebCrawler(verbose=False) as crawler:
+                result = await crawler.arun(
+                    url=url,
+                    word_count_threshold=20,
+                    bypass_cache=True
                 )
-            )
-            
-            async with AsyncWebCrawler(config=browser_conf) as crawler:
-                result = await crawler.arun(url=url, config=run_conf)
                 
                 response = {
                     "url": url,
@@ -42,7 +37,7 @@ def _scrape_single_url_sync(
                 }
                 
                 if extract_markdown and hasattr(result, 'markdown'):
-                    response["markdown"] = result.markdown.raw_markdown if hasattr(result.markdown, 'raw_markdown') else str(result.markdown)
+                    response["markdown"] = result.markdown
                 
                 if extract_html and hasattr(result, 'html'):
                     response["html"] = result.html
@@ -122,17 +117,12 @@ class WebScraperClient:
             Dict containing scraped content
         """
         try:
-            from crawl4ai import BrowserConfig, CrawlerRunConfig, DefaultMarkdownGenerator, PruningContentFilter
-            
-            browser_conf = BrowserConfig(headless=True)
-            run_conf = CrawlerRunConfig(
-                markdown_generator=DefaultMarkdownGenerator(
-                    content_filter=PruningContentFilter(min_word_threshold=20)
+            async with AsyncWebCrawler(verbose=False) as crawler:
+                result = await crawler.arun(
+                    url=url,
+                    word_count_threshold=20,
+                    bypass_cache=True
                 )
-            )
-            
-            async with AsyncWebCrawler(config=browser_conf) as crawler:
-                result = await crawler.arun(url=url, config=run_conf)
                 
                 response = {
                     "url": url,
@@ -140,8 +130,7 @@ class WebScraperClient:
                 }
                 
                 if extract_markdown and hasattr(result, 'markdown'):
-                    # Use raw_markdown from the markdown generator
-                    response["markdown"] = result.markdown.raw_markdown if hasattr(result.markdown, 'raw_markdown') else str(result.markdown)
+                    response["markdown"] = result.markdown
                 
                 if extract_html and hasattr(result, 'html'):
                     response["html"] = result.html

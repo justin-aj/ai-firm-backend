@@ -9,7 +9,9 @@ from routes import (
     search_router,
     sequential_thinking_router,
     scraper_router,
-    embeddings_router
+    embeddings_router,
+    gpt_oss_router,
+    intelligent_query_router
 )
 import logging
 
@@ -63,6 +65,8 @@ app.include_router(search_router, prefix="/search", tags=["Search"])
 app.include_router(sequential_thinking_router)
 app.include_router(scraper_router)
 app.include_router(embeddings_router, prefix="/embeddings", tags=["Embeddings"])
+app.include_router(gpt_oss_router, prefix="/gpt-oss", tags=["GPT-OSS-20B"])
+app.include_router(intelligent_query_router, prefix="/intelligent-query", tags=["Intelligent Query"])
 
 if __name__ == "__main__":
     import uvicorn

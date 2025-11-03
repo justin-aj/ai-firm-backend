@@ -8,19 +8,28 @@ from clients.web_scraper_client import WebScraperClient
 from clients.google_search_client import GoogleCustomSearchClient
 from config import get_settings
 import logging
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/scrape", tags=["Web Scraper"])
 
-# Initialize clients
+# Initialize clients (scraper client uses lazy loading to avoid Windows multiprocessing issues)
 settings = get_settings()
-scraper_client = WebScraperClient(
-    use_dask=settings.use_dask,
-    dask_scheduler=settings.dask_scheduler if settings.dask_scheduler else None,
-    dask_workers=settings.dask_workers
-)
+scraper_client: Optional[WebScraperClient] = None
 search_client = GoogleCustomSearchClient()
+
+
+def get_scraper_client() -> WebScraperClient:
+    """Get or create scraper client (lazy loading to avoid multiprocessing issues on Windows)"""
+    global scraper_client
+    if scraper_client is None:
+        scraper_client = WebScraperClient(
+            use_dask=settings.use_dask,
+            dask_scheduler=settings.dask_scheduler if settings.dask_scheduler else None,
+            dask_workers=settings.dask_workers
+        )
+    return scraper_client
 
 
 @router.get("/status")
@@ -28,16 +37,17 @@ async def get_scraper_status():
     """
     Get scraper status including Dask information
     """
+    client = get_scraper_client()
     status = {
-        "dask_enabled": scraper_client.use_dask,
-        "backend": "Dask Distributed" if scraper_client.use_dask else "AsyncIO"
+        "dask_enabled": client.use_dask,
+        "backend": "Dask Distributed" if client.use_dask else "AsyncIO"
     }
     
-    if scraper_client.use_dask and scraper_client.dask_client:
+    if client.use_dask and client.dask_client:
         try:
-            status["dask_dashboard"] = scraper_client.dask_client.dashboard_link
-            status["dask_workers"] = len(scraper_client.dask_client.scheduler_info()["workers"])
-            status["dask_scheduler"] = scraper_client.dask_client.scheduler.address
+            status["dask_dashboard"] = client.dask_client.dashboard_link
+            status["dask_workers"] = len(client.dask_client.scheduler_info()["workers"])
+            status["dask_scheduler"] = client.dask_client.scheduler.address
         except Exception as e:
             status["dask_error"] = str(e)
     
@@ -61,7 +71,8 @@ async def scrape_url(request: ScrapeUrlRequest):
     """
     try:
         logger.info(f"Scraping URL: {request.url}")
-        result = await scraper_client.scrape_url(
+        client = get_scraper_client()
+        result = await client.scrape_url(
             url=request.url,
             extract_markdown=request.extract_markdown,
             extract_html=request.extract_html,
@@ -112,7 +123,8 @@ async def scrape_urls(request: ScrapeUrlsRequest):
             )
         
         logger.info(f"Scraping {len(request.urls)} URLs")
-        results = await scraper_client.scrape_urls(
+        client = get_scraper_client()
+        results = await client.scrape_urls(
             urls=request.urls,
             extract_markdown=request.extract_markdown,
             extract_html=request.extract_html,
@@ -184,7 +196,8 @@ async def search_and_scrape(request: SearchAndScrapeRequest):
         
         # Step 3: Scrape all URLs concurrently
         logger.info(f"Step 3: Scraping {len(urls)} URLs")
-        scraped_results = await scraper_client.scrape_urls(
+        client = get_scraper_client()
+        scraped_results = await client.scrape_urls(
             urls=urls,
             extract_markdown=request.extract_markdown,
             extract_html=request.extract_html,
