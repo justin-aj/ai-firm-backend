@@ -13,6 +13,9 @@ dask[distributed]
 # Production LLM Inference (vLLM - what real companies use)
 vllm>=0.6.0
 
+# Vision-Language Model Dependencies
+qwen-vl-utils>=0.0.8
+
 # Embeddings and Vector Database
 torch>=2.0.0
 transformers>=4.30.0  # Only for embeddings (BGE-M3), not for inference
