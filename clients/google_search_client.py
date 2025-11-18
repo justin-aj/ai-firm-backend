@@ -130,38 +130,4 @@ class GoogleCustomSearchClient:
         
         return results
     
-    def search_images(
-        self,
-        query: str,
-        num_results: int = 10,
-        start: int = 1,
-        **kwargs: Any
-    ) -> List[Dict[str, str]]:
-        """
-        Search for images
-        
-        Args:
-            query: Search query string
-            num_results: Number of results to return (1-10)
-            start: The index of the first result to return
-            **kwargs: Additional parameters for the API
-        
-        Returns:
-            List of dicts with image information
-        """
-        kwargs["searchType"] = "image"
-        data = self.search(query, num_results, start, **kwargs)
-        
-        if "error" in data:
-            return []
-        
-        results = []
-        for item in data.get("items", []):
-            results.append({
-                "title": item.get("title", ""),
-                "link": item.get("link", ""),
-                "thumbnail": item.get("image", {}).get("thumbnailLink", ""),
-                "contextLink": item.get("image", {}).get("contextLink", "")
-            })
-        
-        return results
+
