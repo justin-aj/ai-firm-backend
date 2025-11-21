@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     milvus_host: str = "localhost"
     milvus_port: str = "19530"
     milvus_collection: str = "ai_firm_vectors"
+    hf_token: str = ""
     
     # Rate limiting (future use)
     rate_limit_per_minute: int = 60
