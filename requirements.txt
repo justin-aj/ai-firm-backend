@@ -1,22 +1,8 @@
-fastapi==0.115.0
-uvicorn[standard]==0.30.6
-pydantic==2.9.2
-python-multipart==0.0.9
-httpx==0.27.2
-python-dotenv==1.0.1
-pydantic-settings==2.5.2
-requests==2.32.3
-mcp==1.1.2
+# Web Scraping
 crawl4ai
-dask[distributed]
-
 # Production LLM Inference (vLLM - what real companies use)
-vllm>=0.6.0
+vllm
 
 # Vision-Language Model Dependencies
-qwen-vl-utils>=0.0.8
-
-# Embeddings and Vector Database
-torch>=2.0.0
-transformers>=4.30.0  # Only for embeddings (BGE-M3), not for inference
-pymilvus>=2.3.0
+qwen-vl-utils
+pymilvus
