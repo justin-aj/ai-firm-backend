@@ -8,7 +8,6 @@ from routes.search import router as search_router
 from routes.sequential_thinking import router as sequential_thinking_router
 from routes.scraper import router as scraper_router
 from routes.embeddings import router as embeddings_router
-from routes.gpt_oss import router as gpt_oss_router
 from routes.intelligent_query import router as intelligent_query_router
 
 __all__ = [
@@ -18,6 +17,6 @@ __all__ = [
     "sequential_thinking_router",
     "scraper_router",
     "embeddings_router",
-    "gpt_oss_router",
+    # GPT-OSS router removed — vLLM is the single inference client
     "intelligent_query_router"
 ]

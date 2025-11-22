@@ -190,3 +190,22 @@ class VLLMClient:
         except:
             logger.warning("Metrics not available in this vLLM version")
             return None
+
+    async def ask(self, question: str, temperature: float = 0.7, max_tokens: Optional[int] = 2048) -> str:
+        """
+        Async wrapper to match GPTOSSClient.ask interface used by other clients.
+        Runs the blocking vLLM completion function in a thread executor.
+        """
+        import asyncio
+
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, lambda: self.completion(prompt=question, temperature=temperature, max_tokens=max_tokens or 512))
+
+    async def complete(self, prompt: str, temperature: float = 0.7, max_tokens: Optional[int] = 2048) -> str:
+        """
+        Async wrapper to match GPTOSSClient.complete
+        """
+        import asyncio
+
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, lambda: self.completion(prompt=prompt, temperature=temperature, max_tokens=max_tokens or 512))

@@ -1,4 +1,17 @@
 import pytest
+import sys, types
+
+# Avoid importing heavy vLLM module in tests; stub VLLM client before app import
+class DummyVLLMClient:
+    async def ask(self, question, temperature=0.7, max_tokens=2048):
+        return "Mocked vLLM answer"
+    async def complete(self, prompt, temperature=0.7, max_tokens=2048):
+        return "Mocked vLLM completion"
+
+stub_vllm = types.ModuleType("clients.vllm_client")
+stub_vllm.VLLMClient = lambda *args, **kwargs: DummyVLLMClient()
+sys.modules["clients.vllm_client"] = stub_vllm
+
 from fastapi.testclient import TestClient
 from main import app
 

@@ -11,7 +11,15 @@ import logging
 from typing import Dict, Any, List, Optional, Tuple
 
 from clients.question_analyzer_client import QuestionAnalyzerClient
-from clients.gpt_oss_client import GPTOSSClient
+try:
+    # Prefer vLLM for production inference where available
+    from clients.vllm_client import VLLMClient as LLMClient
+    _VLLM_AVAILABLE = True
+except Exception as e:  # pragma: no cover
+    # Fall back to GPTOSS if vLLM is not available
+    from clients.gpt_oss_client import GPTOSSClient as LLMClient
+    _VLLM_AVAILABLE = False
+    logger.info(f"vLLM not available, falling back to GPTOSSClient: {e}")
 from clients.google_search_client import GoogleCustomSearchClient
 from clients.google_image_search_client import GoogleImageSearchClient
 from clients.web_scraper_client import WebScraperClient
@@ -21,6 +29,12 @@ from clients.image_analyzer_client import ImageAnalyzerClient
 
 logger = logging.getLogger(__name__)
 
+# Use vLLM exclusively for LLM inference — no GPT-OSS fallback
+try:
+    from clients.vllm_client import VLLMClient as LLMClient
+except Exception as e:  # pragma: no cover - explicit failure
+    raise ImportError("vLLM client is required for intelligent_query service. Install vllm and related dependencies.")
+
 
 async def process_intelligent_query(request: Any) -> Dict[str, Any]:
     """Master orchestration for `/ask` flow.
@@ -28,8 +42,9 @@ async def process_intelligent_query(request: Any) -> Dict[str, Any]:
     Returns a dict with all response fields matching `IntelligentQueryResponse` model.
     """
     # Initialize clients
-    gpt_oss_client = GPTOSSClient()
-    analyzer = QuestionAnalyzerClient(llm_client=gpt_oss_client)
+    # Use vLLM where possible for better performance
+    llm_client = LLMClient()
+    analyzer = QuestionAnalyzerClient(llm_client=llm_client)
     google_search = GoogleCustomSearchClient()
     google_image_search = GoogleImageSearchClient()
     web_scraper = WebScraperClient()
@@ -238,7 +253,7 @@ async def process_intelligent_query(request: Any) -> Dict[str, Any]:
 
     enhanced_prompt = f"""You are a helpful AI assistant. Answer the following question using the provided context from web search results.\n\nQUESTION: {request.question}\n\nCONTEXT FROM WEB SEARCH:\n{context_text}\n\nPlease provide a comprehensive answer based on the context above. If the context doesn't contain relevant information, say so and provide what you know about the topic."""
 
-    response["llm_answer"] = await query_llm(gpt_oss_client, enhanced_prompt, request.temperature, request.max_tokens)
+    response["llm_answer"] = await query_llm(llm_client, enhanced_prompt, request.temperature, request.max_tokens)
 
     return response
 
@@ -458,9 +473,9 @@ def add_image_context_to_retrieved(retrieved_context: List[Dict[str, Any]], ques
     return retrieved_context
 
 
-async def query_llm(gpt_oss_client: GPTOSSClient, prompt: str, temperature: float, max_tokens: int) -> str:
+async def query_llm(llm_client: Any, prompt: str, temperature: float, max_tokens: int) -> str:
     try:
-        answer = await gpt_oss_client.complete(prompt=prompt, temperature=temperature, max_tokens=max_tokens)
+        answer = await llm_client.complete(prompt=prompt, temperature=temperature, max_tokens=max_tokens)
         return answer
     except Exception as e:
         logger.error(f"Service: LLM query error: {e}")
