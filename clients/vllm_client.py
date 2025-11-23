@@ -33,12 +33,12 @@ class VLLMClient:
     def __init__(
         self,
         model_name: str = "meta-llama/Llama-3.1-8B-Instruct",
-        draft_model: str = "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+        draft_model: str = "yuhuili/EAGLE-LLaMA3.1-Instruct-8B",
         gpu_memory_utilization: float = 0.9,
         max_model_len: Optional[int] = 16384,
         trust_remote_code: bool = False,
         num_speculative_tokens: int = 5,
-        speculative_method: str = "ngram"
+        speculative_method: str = "eagle"
     ):
         """
         Initialize vLLM client with speculative decoding
