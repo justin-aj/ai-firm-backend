@@ -1,6 +1,10 @@
 import httpx
+import logging
 from typing import Optional, Dict, Any, List
 from config import get_settings
+
+
+logger = logging.getLogger(__name__)
 
 
 class LMStudioClient:
@@ -15,14 +19,17 @@ class LMStudioClient:
         """Get available models from LM Studio"""
         async with httpx.AsyncClient() as client:
             try:
+                logger.info("Requesting LM Studio models from %s/models", self.base_url)
                 response = await client.get(f"{self.base_url}/models")
                 response.raise_for_status()
                 return response.json()
             except httpx.ConnectError:
+                logger.error("LM Studio connection refused at %s", self.base_url)
                 return {
                     "error": "Cannot connect to LM Studio. Please ensure LM Studio is running on port 1234"
                 }
             except Exception as e:
+                logger.error("Error fetching models from LM Studio: %s", str(e))
                 return {"error": f"Error fetching models: {str(e)}"}
     
     async def chat_completion(
@@ -45,6 +52,7 @@ class LMStudioClient:
                 if max_tokens:
                     payload["max_tokens"] = max_tokens
                 
+                logger.info("LM Studio chat completion request to %s", f"{self.base_url}/chat/completions")
                 response = await client.post(
                     f"{self.base_url}/chat/completions",
                     json=payload
@@ -52,17 +60,17 @@ class LMStudioClient:
                 
                 # Log response for debugging
                 if response.status_code != 200:
-                    import logging
-                    logger = logging.getLogger(__name__)
-                    logger.error(f"LM Studio error {response.status_code}: {response.text}")
+                    logger.error("LM Studio error %s: %s", response.status_code, response.text)
                 
                 response.raise_for_status()
                 return response.json()
             except httpx.ConnectError:
+                logger.error("LM Studio connection refused when posting chat completion to %s", self.base_url)
                 return {
                     "error": "Cannot connect to LM Studio. Please ensure LM Studio is running on port 1234"
                 }
             except Exception as e:
+                logger.error("Error during LM Studio chat completion: %s", str(e))
                 return {"error": f"Error during chat completion: {str(e)}"}
     
     async def completion(
@@ -83,6 +91,7 @@ class LMStudioClient:
                 if max_tokens:
                     payload["max_tokens"] = max_tokens
                 
+                logger.info("LM Studio completion request to %s", f"{self.base_url}/completions")
                 response = await client.post(
                     f"{self.base_url}/completions",
                     json=payload
@@ -90,15 +99,15 @@ class LMStudioClient:
                 
                 # Log response for debugging
                 if response.status_code != 200:
-                    import logging
-                    logger = logging.getLogger(__name__)
-                    logger.error(f"LM Studio completions error {response.status_code}: {response.text}")
+                    logger.error("LM Studio completions error %s: %s", response.status_code, response.text)
                 
                 response.raise_for_status()
                 return response.json()
             except httpx.ConnectError:
+                logger.error("LM Studio connection refused when posting completion to %s", self.base_url)
                 return {
                     "error": "Cannot connect to LM Studio. Please ensure LM Studio is running on port 1234"
                 }
             except Exception as e:
+                logger.error("Error during LM Studio completion: %s", str(e))
                 return {"error": f"Error during completion: {str(e)}"}

@@ -4,6 +4,7 @@ Dedicated client for searching images using Google Custom Search API
 """
 
 import requests
+import logging
 from typing import Dict, Any, List, Optional
 from config import get_settings
 
@@ -12,6 +13,10 @@ class GoogleImageSearchClient:
     """Client for searching images with Google Custom Search API"""
     
     def __init__(self):
+        # Configure logger
+        self.logger = logging.getLogger(__name__)
+        self.logger.debug("Initializing GoogleImageSearchClient")
+
         self.settings = get_settings()
         self.api_key = self.settings.google_api_key
         self.cx = self.settings.google_cx
@@ -45,6 +50,7 @@ class GoogleImageSearchClient:
             Dict containing the full API response
         """
         if not self.api_key or not self.cx:
+            self.logger.warning("Google Custom Search API credentials missing; set GOOGLE_API_KEY and GOOGLE_CX in .env")
             return {
                 "error": "Google Custom Search API credentials not configured. Please set GOOGLE_API_KEY and GOOGLE_CX in .env file"
             }
@@ -73,6 +79,9 @@ class GoogleImageSearchClient:
         params.update(kwargs)
         
         try:
+            self.logger.info("Executing Google Image Search: %s (num=%s start=%s)", query, params.get('num'), params.get('start'))
+            self.logger.debug("Search params: %s", {k: (v if k != 'key' else '***') for k,v in params.items()})
+
             response = requests.get(self.base_url, params=params)
             response.raise_for_status()
             data = response.json()
@@ -89,9 +98,12 @@ class GoogleImageSearchClient:
             
             return data
         except requests.exceptions.RequestException as e:
+            self.logger.error("Image search request failed: %s", str(e))
+            response_text = getattr(e.response, 'text', 'No response') if hasattr(e, 'response') else 'No response'
+            self.logger.debug("Failed response text: %s", response_text)
             return {
                 "error": f"Error performing image search: {str(e)}",
-                "response_text": getattr(e.response, 'text', 'No response') if hasattr(e, 'response') else 'No response'
+                "response_text": response_text
             }
     
     def search_images(
@@ -120,6 +132,7 @@ class GoogleImageSearchClient:
         data = self.search(query, num_results, start, image_size, image_type, **kwargs)
         
         if "error" in data:
+            self.logger.debug("search_images upstream error: %s", data.get("error"))
             return []
         
         results = []
@@ -138,6 +151,7 @@ class GoogleImageSearchClient:
                 "displayLink": item.get("displayLink", "")
             })
         
+        self.logger.info("search_images returning %d items for query=%s", len(results), query)
         return results
     
     def search_image_urls(
@@ -162,6 +176,7 @@ class GoogleImageSearchClient:
             List of direct image URLs
         """
         images = self.search_images(query, num_results, start, image_size, **kwargs)
+        self.logger.debug("search_image_urls found %d image URLs", len(images))
         return [img["link"] for img in images]
     
     def search_large_images(
@@ -181,6 +196,7 @@ class GoogleImageSearchClient:
         Returns:
             List of large image results
         """
+        self.logger.debug("search_large_images: query=%s num_results=%d", query, num_results)
         return self.search_images(
             query,
             num_results,
@@ -205,6 +221,7 @@ class GoogleImageSearchClient:
         Returns:
             List of photo results
         """
+        self.logger.debug("search_photos: query=%s num_results=%d", query, num_results)
         return self.search_images(
             query,
             num_results,
@@ -229,6 +246,7 @@ class GoogleImageSearchClient:
         Returns:
             List of clipart results
         """
+        self.logger.debug("search_clipart: query=%s num_results=%d", query, num_results)
         return self.search_images(
             query,
             num_results,
@@ -253,6 +271,7 @@ class GoogleImageSearchClient:
         Returns:
             List of face image results
         """
+        self.logger.debug("search_faces: query=%s num_results=%d", query, num_results)
         return self.search_images(
             query,
             num_results,
@@ -282,6 +301,7 @@ class GoogleImageSearchClient:
         all_results = []
         start = 1
         
+        self.logger.info("search_with_pagination: fetching up to %d results for query=%s", total_results, query)
         while len(all_results) < total_results:
             batch_size = min(10, total_results - len(all_results))
             batch = self.search_images(
