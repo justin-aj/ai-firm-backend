@@ -1,5 +1,7 @@
 # Web Scraping
 crawl4ai
+pydantic_settings
+
 # Production LLM Inference (vLLM - what real companies use)
 vllm
 

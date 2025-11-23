@@ -11,8 +11,8 @@ from routes.intelligent_query import intelligent_ask, IntelligentQueryRequest, p
 async def main():
     print("--- 1. Preloading VLM (Optional) ---")
     # We wrap the request in the Pydantic model your code expects
-    vlm_req = PreloadVLMRequest(tensor_parallel_size=1)
-    await preload_vlm_endpoint(vlm_req)
+    # vlm_req = PreloadVLMRequest(tensor_parallel_size=1)
+    # await preload_vlm_endpoint(vlm_req)
 
     print("\n--- 2. Running Intelligent Query ---")
     # Construct the request object
