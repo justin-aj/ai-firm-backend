@@ -10,6 +10,9 @@ Functions:
 import logging
 from typing import Dict, Any, List, Optional, Tuple
 
+import torch
+import gc
+
 from clients.question_analyzer_client import QuestionAnalyzerClient
 try:
     # Prefer vLLM for production inference where available
@@ -43,7 +46,12 @@ async def process_intelligent_query(request: Any) -> Dict[str, Any]:
     """
     # Initialize clients
     # Use vLLM where possible for better performance
-    llm_client = LLMClient()
+    # Pass gpu_memory_utilization if your client wrapper supports it. 
+    # 0.7 leaves ~30% (approx 9GB on a V100) for your Embedding Client and overhead.
+    llm_client = LLMClient(
+            gpu_memory_utilization=0.6,  # Limits vLLM to ~19GB, leaving ~13GB for Embeddings/Milvus
+            num_speculative_tokens=3     # Reduce speculative overhead slightly
+        )
     analyzer = QuestionAnalyzerClient(llm_client=llm_client)
     google_search = GoogleCustomSearchClient()
     google_image_search = GoogleImageSearchClient()
@@ -143,6 +151,8 @@ async def process_intelligent_query(request: Any) -> Dict[str, Any]:
             except Exception:
                 logger.debug("Service: Milvus index exists or could not be created")
 
+            # ... inside process_intelligent_query, replacing lines 142-154 ...
+            
             texts = []
             embeddings = []
             metadata_list = []
@@ -150,10 +160,12 @@ async def process_intelligent_query(request: Any) -> Dict[str, Any]:
             for scrape in successful_scrapes:
                 markdown = scrape.get("markdown", "")
                 url = scrape.get("url", "")
-                if len(markdown) > 60000:
-                    markdown = markdown[:60000] + "... [truncated]"
+                
+                # Truncate strictly to avoid OOM on tokenization
+                if len(markdown) > 50000: 
+                    markdown = markdown[:50000] + "... [truncated]"
+                
                 texts.append(markdown)
-                embeddings.append(embedding_client.generate_embedding(markdown, max_length=512))
                 metadata_list.append({
                     "url": url,
                     "query": search_query,
@@ -161,8 +173,22 @@ async def process_intelligent_query(request: Any) -> Dict[str, Any]:
                     "metadata": scrape.get("metadata", {})
                 })
 
-            response["milvus_ids"] = store_texts_in_milvus(milvus_client, embedding_client, texts, embeddings, metadata_list)
-            response["stored_in_milvus"] = True
+            # Generate embeddings in a separate, memory-safe block
+            if texts:
+                try:
+                    # Clear cache before heavy computation
+                    gc.collect()
+                    torch.cuda.empty_cache()
+                    
+                    # Generate embeddings (assuming client handles batching, if not, batch this loop too)
+                    embeddings = embedding_client.generate_embeddings_batch(texts, max_length=512)
+                except Exception as e:
+                    logger.error(f"Embedding generation failed: {e}")
+                    # Fallback or partial fail gracefully
+            
+            if embeddings:
+                response["milvus_ids"] = store_texts_in_milvus(milvus_client, embedding_client, texts, embeddings, metadata_list)
+                response["stored_in_milvus"] = True
 
             # Record topics in topics collection
             try:
@@ -402,15 +428,42 @@ async def scrape_urls(web_scraper: WebScraperClient, urls: List[str]):
 
 
 def store_texts_in_milvus(milvus_client: MilvusClient, embedding_client: EmbeddingClient, texts: List[str], embeddings: List[List[float]], metadata_list: List[Dict[str, Any]]) -> List[int]:
+    """Stores text in Milvus with OOM protection and batching."""
+    
+    # 1. Force cleanup before starting
+    gc.collect()
+    torch.cuda.empty_cache()
+
     milvus_client.connect()
-    milvus_client.create_collection(embedding_dim=len(embeddings[0]) if embeddings else 0)
+    
+    # Determine dimension from the first embedding or client default
+    dim = len(embeddings[0]) if embeddings else embedding_client.get_embedding_dimension()
+    milvus_client.create_collection(embedding_dim=dim)
+    
     try:
         milvus_client.create_index(index_type="IVF_FLAT", metric_type="L2")
     except Exception:
-        pass
-    ids = milvus_client.insert(texts=texts, embeddings=embeddings, metadata=metadata_list)
-    return ids
+        logger.debug("Service: Index likely already exists.")
 
+    total_ids = []
+    
+    # 2. Process in chunks to prevent VRAM spikes
+    BATCH_SIZE = 50 
+    
+    # If we already have embeddings passed in, we insert in batches
+    if embeddings:
+        for i in range(0, len(texts), BATCH_SIZE):
+            batch_texts = texts[i : i + BATCH_SIZE]
+            batch_embeddings = embeddings[i : i + BATCH_SIZE]
+            batch_meta = metadata_list[i : i + BATCH_SIZE]
+            
+            try:
+                ids = milvus_client.insert(texts=batch_texts, embeddings=batch_embeddings, metadata=batch_meta)
+                total_ids.extend(ids)
+            except Exception as e:
+                logger.error(f"Failed to insert batch {i}: {e}")
+                
+    return total_ids
 
 def analyze_images(image_analyzer: ImageAnalyzerClient, search_query: str, request: Any):
     if request.image_analysis_question:
