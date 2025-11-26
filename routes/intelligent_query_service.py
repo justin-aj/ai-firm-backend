@@ -1,23 +1,19 @@
 """
 Service layer for intelligent_query endpoint.
 This module provides helper functions to keep the router small and readable.
-
-Functions:
-- process_intelligent_query: Orchestrates the full flow and returns a dict ready for response model
 """
 
 import logging
 from typing import Dict, Any, List, Optional, Tuple
 import torch
 import gc
+import time
 
 from clients.question_analyzer_client import QuestionAnalyzerClient
 try:
-    # Prefer vLLM for production inference where available
     from clients.vllm_client import VLLMClient as LLMClient
     _VLLM_AVAILABLE = True
-except Exception as e:  # pragma: no cover
-    # Fall back to GPTOSS if vLLM is not available
+except Exception as e: 
     from clients.gpt_oss_client import GPTOSSClient as LLMClient
     _VLLM_AVAILABLE = False
     logger.info(f"vLLM not available, falling back to GPTOSSClient: {e}")
@@ -30,23 +26,19 @@ from clients.image_analyzer_client import ImageAnalyzerClient
 
 logger = logging.getLogger(__name__)
 
-# Use vLLM exclusively for LLM inference — no GPT-OSS fallback
 try:
     from clients.vllm_client import VLLMClient as LLMClient
-except Exception as e:  # pragma: no cover - explicit failure
-    raise ImportError("vLLM client is required for intelligent_query service. Install vllm and related dependencies.")
+except Exception as e:
+    raise ImportError("vLLM client is required for intelligent_query service.")
 
 
 async def process_intelligent_query(request: Any) -> Dict[str, Any]:
-    """Master orchestration for `/ask` flow.
-
-    Returns a dict with all response fields matching `IntelligentQueryResponse` model.
-    """
+    """Master orchestration for `/ask` flow."""
+    
     # Initialize clients
-    # Use vLLM where possible for better performance
     llm_client = LLMClient(
-        gpu_memory_utilization=0.6,   # Keep this low for Milvus/Embeddings
-        max_model_len=8192,           # Lowers cache requirement to ~1GB to fit on V100
+        gpu_memory_utilization=0.6,   
+        max_model_len=8192,           
         num_speculative_tokens=3      
     )
     analyzer = QuestionAnalyzerClient(llm_client=llm_client)
@@ -56,7 +48,6 @@ async def process_intelligent_query(request: Any) -> Dict[str, Any]:
     milvus_client = MilvusClient()
     embedding_client = EmbeddingClient()
 
-    # Defaults for response structure
     response: Dict[str, Any] = {
         "success": True,
         "topics": [],
@@ -79,14 +70,13 @@ async def process_intelligent_query(request: Any) -> Dict[str, Any]:
     # Build search query
     search_query = " ".join(topics) if topics else request.question
 
-    # Step 2: Check caches: topics and image collection
+    # Step 2: Check caches
     should_scrape = True
     should_image_search = True
     existing_context: List[Dict[str, Any]] = []
     image_existing_context: List[Dict[str, Any]] = []
 
     try:
-        # Check cache (logic moved to helper function for cleanliness)
         (
             should_scrape,
             existing_context,
@@ -97,24 +87,22 @@ async def process_intelligent_query(request: Any) -> Dict[str, Any]:
             topics=topics,
             request=request,
         )
-
     except Exception as e:
         logger.warning(f"Service: Error checking topics collection: {e}. Will proceed with scraping.")
         should_scrape = True
 
-    # Step 3: Run web search (if we need fresh content)
+    # Step 3: Run web search
     if should_scrape:
         response["search_results"] = web_search(google_search, query=search_query)
 
-    # Step 3b: Image search (optional)
+    # Step 3b: Image search
     if request.include_image_search and should_image_search:
         response["image_search_results"] = image_search(google_image_search, query=request.image_query or search_query, num_results=request.image_num_results)
 
-    # If we skipped image search but have existing image context, include that in the response
     if not should_image_search and image_existing_context:
         response["image_analysis_results"].extend(convert_image_existing_context(image_existing_context))
 
-    # Step 4: Scrape URLs (if we have any new URLs to scrape)
+    # Step 4: Scrape URLs
     urls = [r.get("link") for r in response["search_results"] if r.get("link")]
     urls = [u for u in urls if u]
     if urls:
@@ -125,14 +113,12 @@ async def process_intelligent_query(request: Any) -> Dict[str, Any]:
     if successful_scrapes:
         try:
             texts = []
-            embeddings = []
             metadata_list = []
 
             for scrape in successful_scrapes:
                 markdown = scrape.get("markdown", "")
                 url = scrape.get("url", "")
                 
-                # Truncate strictly to avoid OOM on tokenization
                 if len(markdown) > 50000: 
                     markdown = markdown[:50000] + "... [truncated]"
                 
@@ -144,27 +130,26 @@ async def process_intelligent_query(request: Any) -> Dict[str, Any]:
                     "metadata": scrape.get("metadata", {})
                 })
 
-            # Generate embeddings (Simple List Comprehension)
             if texts:
+                # 1. Generate Embeddings
                 embeddings = [embedding_client.generate_embedding(t, max_length=512) for t in texts]
-            
-            if embeddings:
+                
+                # 2. Store AND Flush
                 response["milvus_ids"] = store_texts_in_milvus(milvus_client, embedding_client, texts, embeddings, metadata_list)
                 response["stored_in_milvus"] = True
 
-            # Record topics in topics collection
+            # Record topics
             try:
                 topics_milvus = MilvusClient(collection_name="ai_firm_topics")
                 topics_milvus.connect()
                 
-                # Release before insert/index to prevent locks
+                # Release/Flush/Load dance not strictly needed for topics logging, but good practice
                 try: topics_milvus.collection.release()
                 except: pass
                 
                 embedding_dim = embedding_client.get_embedding_dimension()
                 topics_milvus.create_collection(embedding_dim=embedding_dim)
                 
-                # Ensure index exists
                 try: topics_milvus.create_index(index_type="IVF_FLAT", metric_type="L2", params={"nlist": 128})
                 except: pass
 
@@ -180,13 +165,14 @@ async def process_intelligent_query(request: Any) -> Dict[str, Any]:
                         "timestamp": "now"
                     }]
                 )
+                topics_milvus.collection.flush() # Ensure topic is saved
             except Exception as e:
                 logger.warning(f"Service: Could not store topics in topics collection: {e}")
 
         except Exception as e:
             logger.error(f"Service: Error storing textual scrapes in Milvus: {e}")
 
-    # Step 5b: Image analysis (optional)
+    # Step 5b: Image analysis
     if request.include_image_search and request.enable_image_analysis and should_image_search and response["image_search_results"]:
         try:
             image_analyzer = ImageAnalyzerClient(load_vlm=False, enable_embeddings=True)
@@ -207,16 +193,23 @@ async def process_intelligent_query(request: Any) -> Dict[str, Any]:
         except Exception as e:
             logger.warning(f"Service: Image analysis failed: {e}")
 
-    # Step 6: Retrieve relevant context; merge text + image hits
+    # Step 6: Retrieve relevant context
     retrieved_context = existing_context if existing_context else []
     if not retrieved_context:
         try:
             milvus_client.connect()
-            # Release main collection before search to clear any stale locks
-            try: milvus_client.collection.release()
-            except: pass
-                
+            
+            # --- FIX: LOAD instead of RELEASE ---
+            # Releasing here wiped the memory. Loading ensures we see the flushed data.
+            try: 
+                milvus_client.collection.load()
+            except Exception as e:
+                logger.debug(f"Service: Load collection warning (might be already loaded): {e}")
+            # ------------------------------------
+
             question_embedding = embedding_client.generate_embedding(request.question, max_length=512)
+            
+            # Use Strong consistency to guarantee we see the data we just flushed
             retrieved_context = milvus_client.search(
                 query_embedding=question_embedding,
                 top_k=5,
@@ -227,7 +220,6 @@ async def process_intelligent_query(request: Any) -> Dict[str, Any]:
         except Exception as e:
             logger.warning(f"Service: Retrieval failed: {e}")
 
-    # Add image-based context
     if request.include_image_search:
         try:
             retrieved_context = add_image_context_to_retrieved(retrieved_context, request.question)
@@ -236,7 +228,7 @@ async def process_intelligent_query(request: Any) -> Dict[str, Any]:
 
     response["retrieved_context"] = retrieved_context
 
-    # Step 7: Build prompt content and ask LLM
+    # Step 7: Build prompt
     context_parts = []
     for i, doc in enumerate(retrieved_context, 1):
         text = doc.get("text", "")
@@ -247,24 +239,21 @@ async def process_intelligent_query(request: Any) -> Dict[str, Any]:
         context_parts.append(f"[Document {i} from {url}]\n{text}\n")
 
     context_text = "\n---\n".join(context_parts) if context_parts else "No relevant context found."
-
     enhanced_prompt = f"""You are a helpful AI assistant. Answer the following question using the provided context from web search results.\n\nQUESTION: {request.question}\n\nCONTEXT FROM WEB SEARCH:\n{context_text}\n\nPlease provide a comprehensive answer based on the context above. If the context doesn't contain relevant information, say so and provide what you know about the topic."""
 
-    # --- SAVE PROMPT TO FILE FOR DEBUGGING ---
     try:
         with open("last_prompt_context.txt", "w", encoding="utf-8") as f:
             f.write(enhanced_prompt)
         logger.info("Service: Final prompt saved to last_prompt_context.txt")
     except Exception as e:
         logger.warning(f"Service: Could not write prompt to file: {e}")
-    # -----------------------------------------
 
     response["llm_answer"] = await query_llm(llm_client, enhanced_prompt, request.temperature, request.max_tokens)
-
     return response
 
 
-# Singleton and preload helpers for VLM
+# --- Helper Functions ---
+
 _image_analyzer_singleton: Optional[ImageAnalyzerClient] = None
 
 def get_image_analyzer_singleton(gpu_memory_utilization: float = 0.9, tensor_parallel_size: int = 1, enable_embeddings: bool = True) -> ImageAnalyzerClient:
@@ -278,15 +267,12 @@ def get_image_analyzer_singleton(gpu_memory_utilization: float = 0.9, tensor_par
         )
     return _image_analyzer_singleton
 
-
 def preload_image_vlm(tensor_parallel_size: int = 1, force_reload: bool = False) -> Dict[str, Any]:
     global _image_analyzer_singleton
     try:
         if force_reload and _image_analyzer_singleton is not None:
-            try:
-                _image_analyzer_singleton.vlm = None
-            except Exception:
-                pass
+            try: _image_analyzer_singleton.vlm = None
+            except Exception: pass
             _image_analyzer_singleton = None
 
         if _image_analyzer_singleton is None:
@@ -299,20 +285,15 @@ def preload_image_vlm(tensor_parallel_size: int = 1, force_reload: bool = False)
         _image_analyzer_singleton.tensor_parallel_size = tensor_parallel_size
         _image_analyzer_singleton._initialize_vlm()
 
-        return {
-            "status": "loaded" if getattr(_image_analyzer_singleton, 'vlm', None) is not None else "error",
-            "tensor_parallel_size": tensor_parallel_size
-        }
+        return {"status": "loaded" if getattr(_image_analyzer_singleton, 'vlm', None) is not None else "error", "tensor_parallel_size": tensor_parallel_size}
     except Exception as e:
         logger.error(f"Failed to preload VLM: {e}")
         return {"status": "error", "error": str(e)}
-
 
 async def analyze_question(analyzer: QuestionAnalyzerClient, question: str) -> List[str]:
     logger.info("Service: Analyzing question")
     analysis = await analyzer.analyze_question(question=question)
     return analysis.get("topics", [])
-
 
 def check_topic_and_image_cache(embedding_client: EmbeddingClient, topics: List[str], request: Any) -> Tuple[bool, List[Dict[str, Any]], bool, List[Dict[str, Any]]]:
     should_scrape = True
@@ -320,30 +301,23 @@ def check_topic_and_image_cache(embedding_client: EmbeddingClient, topics: List[
     existing_context: List[Dict[str, Any]] = []
     image_existing_context: List[Dict[str, Any]] = []
     
-    # 1. Connect and Setup Topics Collection
     topics_milvus = MilvusClient(collection_name="ai_firm_topics")
     topics_milvus.connect()
     
     topics_text = ", ".join(topics)
     topics_embedding = embedding_client.generate_embedding(topics_text, max_length=128)
     embedding_dim = embedding_client.get_embedding_dimension()
-    
     topics_milvus.create_collection(embedding_dim=embedding_dim)
 
-    # CRITICAL FIX: Release collection before indexing.
-    try:
-        topics_milvus.collection.release()
-    except Exception:
-        pass
+    try: topics_milvus.collection.release()
+    except Exception: pass
 
-    # CRITICAL FIX: Ensure index exists and allow error propagation if it fails cleanly
-    topics_milvus.create_index(
-        index_type="IVF_FLAT", 
-        metric_type="L2", 
-        params={"nlist": 128}
-    )
+    topics_milvus.create_index(index_type="IVF_FLAT", metric_type="L2", params={"nlist": 128})
+    
+    # Load before search
+    try: topics_milvus.collection.load()
+    except: pass
 
-    # 2. Search Topics
     similar_topics = topics_milvus.search(
         query_embedding=topics_embedding,
         top_k=5,
@@ -360,12 +334,8 @@ def check_topic_and_image_cache(embedding_client: EmbeddingClient, topics: List[
             main_milvus.connect()
             main_milvus.create_collection(embedding_dim=embedding_dim)
             
-            # Ensure index exists on main collection too
-            try: 
-                main_milvus.collection.release()
-                main_milvus.create_index(index_type="IVF_FLAT", metric_type="L2", params={"nlist": 128})
-            except: 
-                pass
+            try: main_milvus.collection.load()
+            except: pass
             
             q_emb = embedding_client.generate_embedding(request.question, max_length=512)
             existing_context = main_milvus.search(
@@ -376,12 +346,11 @@ def check_topic_and_image_cache(embedding_client: EmbeddingClient, topics: List[
                 output_fields=["text", "metadata"]
             )
             
-            # Check image cache
             try:
                 image_milvus = MilvusClient(collection_name="image_analysis_retrieval")
                 image_milvus.connect()
                 image_milvus.create_collection(embedding_dim=embedding_dim)
-                try: image_milvus.create_index(index_type="IVF_FLAT", metric_type="L2", params={"nlist": 128})
+                try: image_milvus.collection.load()
                 except: pass
 
                 similar_images = image_milvus.search(
@@ -401,11 +370,9 @@ def check_topic_and_image_cache(embedding_client: EmbeddingClient, topics: List[
 
     return should_scrape, existing_context, should_image_search, image_existing_context
 
-
 def web_search(google_search: GoogleCustomSearchClient, query: str) -> List[Dict[str, Any]]:
     logger.info("Service: Running web search")
     return google_search.search_detailed(query=query, num_results=5)
-
 
 def image_search(google_image_search: GoogleImageSearchClient, query: str, num_results: int) -> List[Dict[str, Any]]:
     try:
@@ -416,15 +383,12 @@ def image_search(google_image_search: GoogleImageSearchClient, query: str, num_r
         logger.warning(f"Service: Image search failed: {e}")
         return []
 
-
 async def scrape_urls(web_scraper: WebScraperClient, urls: List[str]):
     return await web_scraper.scrape_urls(urls=urls, extract_markdown=True, extract_html=False, extract_links=False, max_concurrent=3)
 
-
 def store_texts_in_milvus(milvus_client: MilvusClient, embedding_client: EmbeddingClient, texts: List[str], embeddings: List[List[float]], metadata_list: List[Dict[str, Any]]) -> List[int]:
-    """Stores text in Milvus with OOM protection and batching."""
+    """Stores text in Milvus with FLUSH to ensure immediate searchability."""
     
-    # 1. Force cleanup before starting
     gc.collect()
     torch.cuda.empty_cache()
 
@@ -433,7 +397,7 @@ def store_texts_in_milvus(milvus_client: MilvusClient, embedding_client: Embeddi
     dim = len(embeddings[0]) if embeddings else embedding_client.get_embedding_dimension()
     milvus_client.create_collection(embedding_dim=dim)
     
-    # Release before index creation just in case
+    # Release before index creation logic
     try: milvus_client.collection.release()
     except: pass
 
@@ -443,8 +407,6 @@ def store_texts_in_milvus(milvus_client: MilvusClient, embedding_client: Embeddi
         logger.debug("Service: Index likely already exists.")
 
     total_ids = []
-    
-    # 2. Process in chunks to prevent VRAM spikes
     BATCH_SIZE = 50 
     
     if embeddings:
@@ -458,14 +420,22 @@ def store_texts_in_milvus(milvus_client: MilvusClient, embedding_client: Embeddi
                 total_ids.extend(ids)
             except Exception as e:
                 logger.error(f"Failed to insert batch {i}: {e}")
-                
+    
+    # --- CRITICAL FIX: FLUSH ---
+    # Forces data to disk so it is searchable immediately in the next step
+    try:
+        milvus_client.collection.flush()
+        logger.info("Service: Milvus collection flushed successfully.")
+    except Exception as e:
+        logger.warning(f"Service: Failed to flush collection: {e}")
+    # ---------------------------
+
     return total_ids
 
 def analyze_images(image_analyzer: ImageAnalyzerClient, search_query: str, request: Any):
     if request.image_analysis_question:
         return image_analyzer.answer_visual_question(search_query, request.image_analysis_question, num_images=request.image_num_results)
     return image_analyzer.describe_images(query=search_query, num_images=request.image_num_results)
-
 
 def convert_img_results_to_dicts(img_results: List[Any]) -> List[Dict[str, Any]]:
     converted = []
@@ -479,7 +449,6 @@ def convert_img_results_to_dicts(img_results: List[Any]) -> List[Dict[str, Any]]
             "error": getattr(r, 'error', None)
         })
     return converted
-
 
 def convert_image_existing_context(image_existing_context: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     results = []
@@ -495,13 +464,11 @@ def convert_image_existing_context(image_existing_context: List[Dict[str, Any]])
         })
     return results
 
-
 def store_image_results(image_analyzer: ImageAnalyzerClient, img_results: List[Any], query: str) -> Tuple[List[int], bool]:
     store_resp = image_analyzer.store_in_vectordb(img_results, query=query)
     ids = store_resp.get("ids", []) if isinstance(store_resp, dict) else []
     stored = bool(store_resp.get("stored", 0)) if isinstance(store_resp, dict) else bool(ids)
     return ids, stored
-
 
 def add_image_context_to_retrieved(retrieved_context: List[Dict[str, Any]], question: str) -> List[Dict[str, Any]]:
     image_analyzer_for_search = ImageAnalyzerClient(load_vlm=False, enable_embeddings=True)
@@ -520,7 +487,6 @@ def add_image_context_to_retrieved(retrieved_context: List[Dict[str, Any]], ques
                 }
             })
     return retrieved_context
-
 
 async def query_llm(llm_client: Any, prompt: str, temperature: float, max_tokens: int) -> str:
     try:
