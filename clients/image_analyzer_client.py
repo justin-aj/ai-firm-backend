@@ -316,19 +316,17 @@ class ImageAnalyzerClient:
             max_tokens=512
         )
         
-        # CHANGED PROMPT: Optimized for Vector Search / Embeddings
-        # We ask for a structured list. This packs the embedding with high-value terms
-        # without the "fluff" of natural language sentences.
+        # CHANGED PROMPT: Optimized for SEMANTIC Vector Retrieval
+        # We ask the VLM to "simulate" the documentation.
+        # This aligns the vector space of the image description with your actual text docs.
         prompt = """
-        Analyze this technical diagram for a search index. 
-        Do not write full sentences. Output a structured list of:
-        1. Visible text labels and component names.
-        2. Key data flows (what connects to what).
-        3. The specific architectural patterns shown.
+        Analyze this architecture diagram and describe it as if you were writing the official technical documentation.
         
-        Format:
-        - Components: [List items]
-        - Flows: [List items]
+        1. Identify the key components (e.g. Client, Server, Repository) and explicitly explain how they interact.
+        2. Describe the data flow direction (e.g. "Requests enter via gRPC...").
+        3. Use precise technical verbs (e.g. "orchestrates," "distributes," "loads," "communicates").
+        
+        Do not use bullet points. Write a dense, information-rich paragraph describing the system architecture shown.
         """
         
         return self.search_and_analyze(

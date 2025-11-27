@@ -12,12 +12,17 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from clients.google_image_search_client import GoogleImageSearchClient
 from clients.image_analyzer_client import ImageAnalyzerClient
 from clients.question_analyzer_client import QuestionAnalyzerClient
+from routes.intelligent_query_service import run_synthesis_phase
+from routes.intelligent_query import IntelligentQuerySynthesisRequest
 
-# Import the LLM Client for Step 1
+# Import the LLM Client for Step 1 (vLLM only)
 try:
     from clients.vllm_client import VLLMClient as LLMClient
-except ImportError:
-    from clients.gpt_oss_client import GPTOSSClient as LLMClient
+except ImportError as e:
+    # vLLM is required for this tool; fail fast with an actionable message
+    raise ImportError(
+        "vLLM client is required. Please install and configure vLLM. See README for details."
+    ) from e
 
 # Setup basic logging
 logging.basicConfig(level=logging.INFO)
@@ -126,8 +131,47 @@ async def main():
 
         print(f"   [VLM] Successfully analyzed {len(successful_results)} images.")
         for res in successful_results:
-            preview = res.analysis[:100].replace('\n', ' ')
+            preview = res.analysis.replace('\n', ' ')
             print(f"    > {preview}...")
+
+            # Retrieve related context for this visual result from the vector DB
+            try:
+                related_context = analyzer.search_vectordb(query=preview, top_k=5)
+            except Exception as e:
+                related_context = []
+                print(f"    [WARN] Failed to search vectordb for preview: {e}")
+
+            # Build synthesis request using the image analysis as the question
+            synth_request = IntelligentQuerySynthesisRequest(
+                question=preview,
+                temperature=0.0,
+                max_tokens=256,
+                include_image_search=False,
+                image_query=None,
+                image_num_results=0,
+                enable_image_analysis=False,
+                image_analysis_question=None,
+                store_image_analysis=False
+            )
+
+                # Use a single lightweight vLLM for per-image synthesis to reduce re-loads
+                # NOTE: This LLM should be small and configured to be low-memory. If vLLM isn't available
+                # the script will skip synthesis per image.
+                if 'synthesis_llm' not in locals():
+                    try:
+                        synthesis_llm = LLMClient(gpu_memory_utilization=0.05, max_model_len=2048, num_speculative_tokens=1)
+                        logger.info("Synthesis vLLM initialized for per-image synthesis")
+                    except Exception as e:
+                        synthesis_llm = None
+                        print(f"    [WARN] Synthesis vLLM initialization failed: {e}")
+
+            # Execute synthesis using the retrieved vectordb context
+            if synthesis_llm is not None:
+                try:
+                    synthesis_result = await run_synthesis_phase(synth_request, related_context, analyzer.embedding_client, synthesis_llm)
+                    print(f"    [SYNTHESIS] Answer: {synthesis_result.get('llm_answer', '')}")
+                except Exception as e:
+                    print(f"    [ERROR] Synthesis failed for image preview: {e}")
 
         # 3. Store in Vector DB
         print("\n   [DB] Storing into Milvus...")
@@ -147,6 +191,11 @@ async def main():
         print("\n   [CLEANUP] Unloading VLM...")
         if 'analyzer' in locals():
             del analyzer
+        if 'synthesis_llm' in locals() and synthesis_llm is not None:
+            try:
+                del synthesis_llm
+            except Exception:
+                pass
         clean_gpu()
         print("=== PIPELINE COMPLETE ===")
 

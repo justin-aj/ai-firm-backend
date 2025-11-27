@@ -6,8 +6,12 @@ Multi-agent workflow for processing user queries
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
-from routes.intelligent_query_service import process_intelligent_query
-from routes.intelligent_query_service import preload_image_vlm
+from routes.intelligent_query_service import (
+    process_intelligent_query,
+    preload_image_vlm,
+    run_ingestion_phase,
+    run_synthesis_phase,
+)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -45,48 +49,76 @@ class IntelligentQueryResponse(BaseModel):
     llm_answer: str
 
 
-@router.post("/ask", response_model=IntelligentQueryResponse)
-async def intelligent_ask(request: IntelligentQueryRequest):
+@router.post("/ask/ingest", response_model=IntelligentQueryResponse)
+async def intelligent_ask_run_ingestion_phase(request: IntelligentQueryRequest):
     """
-    Process a user question through multi-agent workflow:
-    1. Question Analyzer Agent: Uses LLM to break down question into topics/concepts
-    2. Google Search: Search for relevant URLs
-    3. Web Scraper: Scrape content from URLs
-    4. Milvus Storage: Store scraped content with embeddings
-    
-    Example:
-    ```json
-    {
-        "question": "What is the use of Triton in ML? How can it help me in my GPU based project?",
-        "temperature": 0.7
-    }
-    ```
+    Process a user question through multi-agent workflow.
     """
     # Input validation
     if not request.question or len(request.question.strip()) == 0:
         raise HTTPException(status_code=400, detail="Question cannot be empty")
 
-    # Delegate orchestration to the service layer
-    result = await process_intelligent_query(request)
-
-    # Build and return response
-    return IntelligentQueryResponse(**result)
-
-
-class PreloadVLMRequest(BaseModel):
-    tensor_parallel_size: int = Field(1, ge=1, description="Number of GPUs to use in tensor parallel mode")
-    force_reload: bool = Field(False, description="Force reload the model if already loaded")
-
-
-@router.post("/preload-vlm")
-async def preload_vlm_endpoint(request: PreloadVLMRequest):
-    """Eagerly preload the Qwen3-VL VLM into memory to avoid first-call latency.
-
-    This endpoint will create or recreate a shared ImageAnalyzerClient and load its VLM.
-    """
     try:
-        result = preload_image_vlm(tensor_parallel_size=request.tensor_parallel_size, force_reload=request.force_reload)
-        return result
+        # Delegate orchestration to the service layer
+        partial_response, existing_context, embedding_client, llm_client = await run_ingestion_phase(request)
+
+        # Build a response containing default fields required by IntelligentQueryResponse
+        response: Dict[str, Any] = {
+            "success": partial_response.get("success", True),
+            "topics": partial_response.get("topics", []),
+            "search_results": partial_response.get("search_results", []),
+            "scraped_content": partial_response.get("scraped_content", []),
+            "image_search_results": [],
+            "image_analysis_results": [],
+            "stored_in_milvus": partial_response.get("stored_in_milvus", False),
+            "milvus_ids": partial_response.get("milvus_ids", []),
+            "stored_image_in_milvus": False,
+            "image_milvus_ids": [],
+            "retrieved_context": existing_context or [],
+            "llm_answer": "",
+        }
+        return IntelligentQueryResponse(**response)
     except Exception as e:
-        logger.error(f"Failed to preload VLM: {e}")
+        logger.error(f"Ingestion failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class IntelligentQuerySynthesisRequest(IntelligentQueryRequest):
+    existing_context: Optional[List[Dict[str, Any]]] = None
+
+
+@router.post("/ask/synth", response_model=IntelligentQueryResponse)
+async def intelligent_ask_run_synthesis_phase(request: IntelligentQuerySynthesisRequest):
+    """
+    Process a user question through multi-agent workflow.
+    """
+    # Input validation
+    if not request.question or len(request.question.strip()) == 0:
+        raise HTTPException(status_code=400, detail="Question cannot be empty")
+
+    try:
+        # Delegate orchestration to the service layer
+        # For synthesis, reinitialize necessary clients and run the pipeline with provided context
+        embedding_client = EmbeddingClient()
+        llm_client = LLMClient(gpu_memory_utilization=0.6, num_speculative_tokens=3, max_model_len=8192)
+        existing_context = request.existing_context or []
+        synthesis_result = await run_synthesis_phase(request, existing_context, embedding_client, llm_client)
+
+        # Build final response with default placeholders for fields not produced during synthesis
+        response: Dict[str, Any] = {
+            "success": True,
+            "topics": [],
+            "search_results": [],
+            "scraped_content": [],
+            "image_search_results": [],
+            "image_analysis_results": [],
+            "stored_in_milvus": False,
+            "milvus_ids": [],
+            "stored_image_in_milvus": False,
+            "image_milvus_ids": [],
+            "retrieved_context": synthesis_result.get("retrieved_context", []),
+            "llm_answer": synthesis_result.get("llm_answer", ""),
+        }
+        return IntelligentQueryResponse(**response)
+    except Exception as e:
+        logger.error(f"Synthesis failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
