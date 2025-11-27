@@ -63,7 +63,8 @@ class ImageAnalyzerClient:
         tensor_parallel_size: int = 1,
         enable_embeddings: bool = True,
         milvus_host: str = "localhost",
-        milvus_port: str = "19530"
+        milvus_port: str = "19530",
+        max_model_len: int = 8192  # <--- ADDED: Default to 8k to save memory
     ):
         """
         Initialize Image Analyzer
@@ -75,12 +76,14 @@ class ImageAnalyzerClient:
             enable_embeddings: Whether to generate embeddings for analysis results
             milvus_host: Milvus server host
             milvus_port: Milvus server port
+            max_model_len: Maximum context length for VLM (lower this to save VRAM)
         """
         self.image_search = GoogleImageSearchClient()
         self.vlm = None
         self.tensor_parallel_size = tensor_parallel_size
         self.gpu_memory_utilization = gpu_memory_utilization
         self.enable_embeddings = enable_embeddings
+        self.max_model_len = max_model_len  # <--- Store it
         
         # Initialize embedding client if enabled
         self.embedding_client = EmbeddingClient() if enable_embeddings else None
@@ -96,14 +99,15 @@ class ImageAnalyzerClient:
             self._initialize_vlm()
         
         logger.info(f"ImageAnalyzerClient initialized (GPU count: {tensor_parallel_size}, Embeddings: {enable_embeddings})")
-    
+
     def _initialize_vlm(self):
         """Initialize VLM (lazy loading to save memory)"""
         if self.vlm is None:
-            logger.info("Loading Qwen3-VL model (this may take 1-2 minutes)...")
+            logger.info(f"Loading Qwen3-VL model (Context: {self.max_model_len})...")
             self.vlm = Qwen3VLClient(
                 gpu_memory_utilization=self.gpu_memory_utilization,
-                tensor_parallel_size=self.tensor_parallel_size
+                tensor_parallel_size=self.tensor_parallel_size,
+                max_model_len=self.max_model_len  # <--- Pass it down
             )
             logger.info("Qwen3-VL loaded successfully")
     
@@ -312,9 +316,24 @@ class ImageAnalyzerClient:
             max_tokens=512
         )
         
+        # CHANGED PROMPT: Optimized for Vector Search / Embeddings
+        # We ask for a structured list. This packs the embedding with high-value terms
+        # without the "fluff" of natural language sentences.
+        prompt = """
+        Analyze this technical diagram for a search index. 
+        Do not write full sentences. Output a structured list of:
+        1. Visible text labels and component names.
+        2. Key data flows (what connects to what).
+        3. The specific architectural patterns shown.
+        
+        Format:
+        - Components: [List items]
+        - Flows: [List items]
+        """
+        
         return self.search_and_analyze(
             query=query,
-            analysis_question="Describe this image in detail. What objects, actions, or concepts are shown?",
+            analysis_question=prompt,
             config=config
         )
     
