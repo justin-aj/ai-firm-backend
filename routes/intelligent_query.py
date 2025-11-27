@@ -8,10 +8,11 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from routes.intelligent_query_service import (
     process_intelligent_query,
-    preload_image_vlm,
     run_ingestion_phase,
     run_synthesis_phase,
 )
+from clients.embedding_client import EmbeddingClient
+from clients.vllm_client import VLLMClient as LLMClient
 import logging
 
 logger = logging.getLogger(__name__)
@@ -83,7 +84,10 @@ async def intelligent_ask_run_ingestion_phase(request: IntelligentQueryRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 class IntelligentQuerySynthesisRequest(IntelligentQueryRequest):
+    """Synthesis-only request schema: existing_context can be provided and image_num_results can be 0."""
     existing_context: Optional[List[Dict[str, Any]]] = None
+    # Allow passing image_num_results=0 when include_image_search is False
+    image_num_results: int = Field(0, ge=0, le=10)
 
 
 @router.post("/ask/synth", response_model=IntelligentQueryResponse)

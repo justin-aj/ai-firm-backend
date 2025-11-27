@@ -392,18 +392,18 @@ class ImageAnalyzerClient:
         if not self.enable_embeddings:
             raise ValueError("Embeddings are disabled. Initialize with enable_embeddings=True")
         
-        # Connect to Milvus
+        # Connect to Milvus (MilvusClient handles collection connection/details)
         self.milvus_client.connect()
-        
-        # Load collection
-        from pymilvus import Collection
-        self.milvus_client.collection = Collection("image_analysis_retrieval")
+        # Ensure collection exists
+        if not self.milvus_client.has_collection():
+            logger.warning("Milvus collection does not exist: returning empty results")
+            return []
         
         # Generate query embedding
         logger.info(f"Searching for: '{query}'")
         query_embedding = self.embedding_client.generate_embedding(query)
         
-        # Search vector database
+        # Search vector database via the MilvusClient wrapper
         search_results = self.milvus_client.search(
             query_embedding=query_embedding,
             top_k=top_k,
