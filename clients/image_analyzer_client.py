@@ -63,7 +63,8 @@ class ImageAnalyzerClient:
         tensor_parallel_size: int = 1,
         enable_embeddings: bool = True,
         milvus_host: str = "localhost",
-        milvus_port: str = "19530"
+        milvus_port: str = "19530",
+        max_model_len: int = 8192  # <--- ADDED: Default to 8k to save memory
     ):
         """
         Initialize Image Analyzer
@@ -75,12 +76,14 @@ class ImageAnalyzerClient:
             enable_embeddings: Whether to generate embeddings for analysis results
             milvus_host: Milvus server host
             milvus_port: Milvus server port
+            max_model_len: Maximum context length for VLM (lower this to save VRAM)
         """
         self.image_search = GoogleImageSearchClient()
         self.vlm = None
         self.tensor_parallel_size = tensor_parallel_size
         self.gpu_memory_utilization = gpu_memory_utilization
         self.enable_embeddings = enable_embeddings
+        self.max_model_len = max_model_len  # <--- Store it
         
         # Initialize embedding client if enabled
         self.embedding_client = EmbeddingClient() if enable_embeddings else None
@@ -96,14 +99,15 @@ class ImageAnalyzerClient:
             self._initialize_vlm()
         
         logger.info(f"ImageAnalyzerClient initialized (GPU count: {tensor_parallel_size}, Embeddings: {enable_embeddings})")
-    
+
     def _initialize_vlm(self):
         """Initialize VLM (lazy loading to save memory)"""
         if self.vlm is None:
-            logger.info("Loading Qwen3-VL model (this may take 1-2 minutes)...")
+            logger.info(f"Loading Qwen3-VL model (Context: {self.max_model_len})...")
             self.vlm = Qwen3VLClient(
                 gpu_memory_utilization=self.gpu_memory_utilization,
-                tensor_parallel_size=self.tensor_parallel_size
+                tensor_parallel_size=self.tensor_parallel_size,
+                max_model_len=self.max_model_len  # <--- Pass it down
             )
             logger.info("Qwen3-VL loaded successfully")
     
@@ -312,9 +316,22 @@ class ImageAnalyzerClient:
             max_tokens=512
         )
         
+        # CHANGED PROMPT: Optimized for SEMANTIC Vector Retrieval
+        # We ask the VLM to "simulate" the documentation.
+        # This aligns the vector space of the image description with your actual text docs.
+        prompt = """
+        Analyze this architecture diagram and describe it as if you were writing the official technical documentation.
+        
+        1. Identify the key components (e.g. Client, Server, Repository) and explicitly explain how they interact.
+        2. Describe the data flow direction (e.g. "Requests enter via gRPC...").
+        3. Use precise technical verbs (e.g. "orchestrates," "distributes," "loads," "communicates").
+        
+        Do not use bullet points. Write a dense, information-rich paragraph describing the system architecture shown.
+        """
+        
         return self.search_and_analyze(
             query=query,
-            analysis_question="Describe this image in detail. What objects, actions, or concepts are shown?",
+            analysis_question=prompt,
             config=config
         )
     
@@ -375,18 +392,18 @@ class ImageAnalyzerClient:
         if not self.enable_embeddings:
             raise ValueError("Embeddings are disabled. Initialize with enable_embeddings=True")
         
-        # Connect to Milvus
+        # Connect to Milvus (MilvusClient handles collection connection/details)
         self.milvus_client.connect()
-        
-        # Load collection
-        from pymilvus import Collection
-        self.milvus_client.collection = Collection("image_analysis_retrieval")
+        # Ensure collection exists
+        if not self.milvus_client.has_collection():
+            logger.warning("Milvus collection does not exist: returning empty results")
+            return []
         
         # Generate query embedding
         logger.info(f"Searching for: '{query}'")
         query_embedding = self.embedding_client.generate_embedding(query)
         
-        # Search vector database
+        # Search vector database via the MilvusClient wrapper
         search_results = self.milvus_client.search(
             query_embedding=query_embedding,
             top_k=top_k,
