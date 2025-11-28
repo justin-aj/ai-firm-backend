@@ -50,6 +50,8 @@ def write_result_entry(f, entry_num, image_url, question, context, answer):
     f.write(f"RETRIEVED CONTEXT:\n{context}\n\n")
     
     f.write(f"SYNTHESIZED ANSWER:\n{answer}\n\n")
+    
+    f.write(f"SYNTHESIZED ANSWER:\n{answer}\n\n")
 
 
 def clean_gpu():
@@ -175,10 +177,32 @@ async def main():
             max_model_len=8192
         )
         
-        print(f"   [VLM] Analyzing {len(search_results)} images...")
-        analyzed_results = vlm_analyzer.describe_images(
-            query=generated_search_query, 
-            num_images=NUM_IMAGES
+        print(f"   [VLM] Analyzing {len(search_results)} images from Phase 2...")
+        
+        # Build the analysis config
+        from clients.image_analyzer_client import AnalysisConfig
+        config = AnalysisConfig(
+            num_images=NUM_IMAGES,
+            temperature=0.3,
+            max_tokens=512
+        )
+        
+        # Analysis prompt (same as describe_images uses)
+        analysis_prompt = """
+        Analyze this architecture diagram and describe it as if you were writing the official technical documentation.
+        
+        1. Identify the key components (e.g. Client, Server, Repository) and explicitly explain how they interact.
+        2. Describe the data flow direction (e.g. "Requests enter via gRPC...").
+        3. Use precise technical verbs (e.g. "orchestrates," "distributes," "loads," "communicates").
+        
+        Do not use bullet points. Write a dense, information-rich paragraph describing the system architecture shown.
+        """
+        
+        # Analyze using the SAME URLs from Phase 2 (not a new search)
+        analyzed_results = vlm_analyzer._analyze_batch(
+            images=search_results,  # Pass the original search results directly
+            question=analysis_prompt,
+            config=config
         )
         
         successful_results = [r for r in analyzed_results if not getattr(r, 'error', None)]
@@ -194,9 +218,11 @@ async def main():
         # Collect image analyses and URLs
         for idx, res in enumerate(successful_results):
             preview = res.analysis.replace('\n', ' ')
-            image_url = getattr(res, 'url', None) or getattr(res, 'image_url', None) or search_results[idx].get('link', 'N/A')
+            image_url = res.image_url  # Now this is correct - from the same search results
+            
             image_analyses.append((preview, image_url))
-            print(f"    > {preview[:100]}...")
+            print(f"    [{idx+1}] URL: {image_url[:60]}...")
+            print(f"        Analysis: {preview[:100]}...")
 
         # Store in Vector DB
         print("\n   [DB] Storing into Milvus...")
@@ -346,6 +372,65 @@ async def main():
         f.write(f"Pipeline Completed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
     
     print(f"   [SUCCESS] Results written to {OUTPUT_FILE}")
+    
+    # ---------------------------------------------------------
+    # WRITE INDIVIDUAL MARKDOWN FILES FOR EACH IMAGE
+    # ---------------------------------------------------------
+    print(f"\n--- Writing Individual Markdown Files ---")
+    
+    # Create output directory for markdown files
+    md_output_dir = "image_reports"
+    os.makedirs(md_output_dir, exist_ok=True)
+    
+    for idx, result in enumerate(synthesis_results, 1):
+        md_filename = os.path.join(md_output_dir, f"image_{idx}_report.md")
+        
+        with open(md_filename, 'w') as f:
+            # Title
+            f.write(f"# Image Analysis Report #{idx}\n\n")
+            f.write(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            f.write(f"**Original Query:** {RAW_QUESTION}\n\n")
+            f.write("---\n\n")
+            
+            # Image section
+            f.write("## Image\n\n")
+            f.write(f"![Image {idx}]({result['image_url']})\n\n")
+            f.write(f"**URL:** {result['image_url']}\n\n")
+            f.write("---\n\n")
+            
+            # VLM Analysis section
+            f.write("## VLM Analysis (Image Description)\n\n")
+            f.write(f"{result['question']}\n\n")
+            f.write("---\n\n")
+            
+            # Synthesized Answer section
+            f.write("## Synthesized Answer\n\n")
+            f.write(f"{result['answer']}\n\n")
+        
+        print(f"   [CREATED] {md_filename}")
+    
+    # Create an index/summary markdown file
+    index_filename = os.path.join(md_output_dir, "README.md")
+    with open(index_filename, 'w') as f:
+        f.write("# Image Analysis Results\n\n")
+        f.write(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+        f.write(f"**Query:** {RAW_QUESTION}\n\n")
+        f.write(f"**Optimized Search Query:** {generated_search_query}\n\n")
+        f.write(f"**Total Images Analyzed:** {len(synthesis_results)}\n\n")
+        f.write("---\n\n")
+        f.write("## Images\n\n")
+        
+        for idx, result in enumerate(synthesis_results, 1):
+            f.write(f"### {idx}. [Image Report {idx}](image_{idx}_report.md)\n\n")
+            f.write(f"![Image {idx}]({result['image_url']})\n\n")
+            # Short preview of answer
+            answer_preview = result['answer'][:200] + "..." if len(result['answer']) > 200 else result['answer']
+            f.write(f"**Preview:** {answer_preview}\n\n")
+            f.write("---\n\n")
+    
+    print(f"   [CREATED] {index_filename}")
+    print(f"   [SUCCESS] {len(synthesis_results)} markdown reports written to '{md_output_dir}/' directory")
+    
     print_gpu_memory()
     print("=== PIPELINE COMPLETE ===")
 
