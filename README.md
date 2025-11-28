@@ -1,6 +1,6 @@
 # AI Firm Backend - Intelligent RAG System
 
-An intelligent **Retrieval-Augmented Generation (RAG) system** that answers questions by searching the web, scraping relevant content, and using a local LLM (GPT-OSS-20B) to generate contextual answers. Features **smart topic-based caching** to avoid redundant scraping.
+An intelligent **Retrieval-Augmented Generation (RAG) system** that answers questions by searching the web, scraping relevant content, and using a local LLM (vLLM) to generate contextual answers. Features **smart topic-based caching** to avoid redundant scraping.
 
 ## 🎯 Project Idea
 
@@ -12,7 +12,7 @@ An intelligent **Retrieval-Augmented Generation (RAG) system** that answers ques
 3. 🌐 **Searches** Google only when needed (saves API calls)
 4. 📄 **Scrapes** web content and stores it with embeddings
 5. 🎯 **Retrieves** the most relevant context from our vector database
-6. 💬 **Generates** answers using GPT-OSS-20B with retrieved context
+6. 💬 **Generates** answers using vLLM with retrieved context
 
 ### Key Innovation: Smart Topic Caching
 - Maintains a lightweight topics database  
@@ -25,7 +25,7 @@ An intelligent **Retrieval-Augmented Generation (RAG) system** that answers ques
 ```
 User Question
      ↓
-Topic Analyzer (GPT-OSS extracts topics)
+Topic Analyzer (vLLM extracts topics)
      ↓
 Topics Cache Check (Milvus: ai_firm_topics)
      ↓
@@ -39,17 +39,17 @@ Store in Milvus (content + topics)
      ↓
 Retrieve Top 5 Relevant Docs
      ↓
-GPT-OSS-20B Generates Answer with Context
+vLLM Generates Answer with Context
      ↓
 Final Answer (15-20s first time)
 ```
 
 ## ✨ Features
 
-- **🤖 LLM-Based Topic Extraction** - GPT-OSS-20B analyzes questions intelligently
-- **📊 Dual Vector Storage** - Separate collections for topics (fast) and content (comprehensive)
-- **🔍 Google Custom Search** - Real-time web search integration
-- **🕷️ Crawl4AI Scraping** - Extract markdown content from any URL
+ - **🤖 LLM-Based Topic Extraction** - vLLM analyzes questions intelligently
+ - **📊 Dual Vector Storage** - Separate collections for topics (fast) and content (comprehensive)
+ - **🔍 Google Custom Search** - Real-time web search integration
+ - **🕷️ Crawl4AI Scraping** - Extract markdown content from any URL
 - **🧮 BGE-M3 Embeddings** - 1024-dimensional multilingual embeddings
 - **💾 Milvus Vector DB** - Efficient similarity search with L2 distance
 - **⚡ Smart Caching** - Topic-based deduplication (saves ~70% of scraping)
@@ -59,7 +59,7 @@ Final Answer (15-20s first time)
 
 ### Prerequisites
 - Python 3.10+
-- LM Studio with GPT-OSS-20B model loaded
+- vLLM or LM Studio (optional) for local LLM inference
 - Google Custom Search API credentials
 - Milvus vector database
 
@@ -90,7 +90,7 @@ docker run -d --name milvus-standalone -p 19530:19530 milvusdb/milvus:latest
 ```
 
 **LM Studio:**
-1. Load GPT-OSS-20B model
+1. Load vLLM model (if using local inference)
 2. Start server on port 1234
 
 ### 4. Run Server
@@ -195,7 +195,7 @@ curl -X POST http://localhost:8000/intelligent-query/ask \
 
 8. **Generate Answer**
    ```python
-   answer = gpt_oss.complete(f"""
+   answer = vllm.complete(f"""
    Question: {question}
    Context: {context}
    Answer based on the context above.
@@ -207,7 +207,7 @@ curl -X POST http://localhost:8000/intelligent-query/ask \
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
 | **API** | FastAPI | Async REST endpoints |
-| **LLM** | GPT-OSS-20B | Question analysis & answers |
+| **LLM** | vLLM (e.g., Llama-3/TinyLlama) | Question analysis & answers |
 | **Search** | Google Custom Search | Web search |
 | **Scraping** | Crawl4AI | Content extraction |
 | **Embeddings** | BGE-M3 | 1024-dim vectors |
@@ -235,7 +235,7 @@ ai-firm-backend/
 ├── main.py                          # FastAPI entry point
 ├── clients/                         # Service clients (lazy-loaded)
 │   ├── question_analyzer_client.py  # Topic extraction
-│   ├── gpt_oss_client.py           # GPT-OSS integration
+│   ├── vllm_client.py              # vLLM integration
 │   ├── google_search_client.py     # Google Search
 │   ├── web_scraper_client.py       # Crawl4AI scraper
 │   ├── embedding_client.py         # BGE-M3 embeddings
@@ -264,7 +264,7 @@ ai-firm-backend/
 
 ## 📚 Documentation
 
-- **[GPT-OSS Guide](docs/GPT_OSS_GUIDE.md)** - Setting up GPT-OSS-20B
+- **vLLM Guide** - Setting up vLLM for local inference (see docs/VLLM_GUIDE.md)
 - **[Embeddings Guide](docs/EMBEDDINGS_GUIDE.md)** - BGE-M3 details
 - **[Scraping Guide](docs/SCRAPE_AND_EMBED.md)** - Crawl4AI setup
 
@@ -277,4 +277,4 @@ Educational project - feel free to:
 
 ---
 
-**Built with ❤️ using FastAPI, GPT-OSS-20B, and Milvus**
+**Built with ❤️ using FastAPI, vLLM, and Milvus**

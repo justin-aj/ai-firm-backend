@@ -1,36 +1,9 @@
-import pytest
-import sys, types
+"""Deprecated test archived to `deprecated/tests/test_intelligent_query_images.py`.
 
-# Avoid importing heavy vLLM module in tests; stub VLLM client before app import
-class DummyVLLMClient:
-    async def ask(self, question, temperature=0.7, max_tokens=2048):
-        return "Mocked vLLM answer"
-    async def complete(self, prompt, temperature=0.7, max_tokens=2048):
-        return "Mocked vLLM completion"
+This test used FastAPI's TestClient and has been moved to `deprecated/tests/`.
+"""
 
-stub_vllm = types.ModuleType("clients.vllm_client")
-stub_vllm.VLLMClient = lambda *args, **kwargs: DummyVLLMClient()
-sys.modules["clients.vllm_client"] = stub_vllm
-
-from fastapi.testclient import TestClient
-from main import app
-
-from typing import List, Dict
-
-client = TestClient(app)
-
-
-class DummyGoogleImageSearchClient:
-    def search_images(self, query: str, num_results: int = 10, **kwargs):
-        return [
-            {
-                "title": f"Image {i}",
-                "link": f"https://images.example/{i}.jpg",
-                "thumbnail": f"https://images.example/{i}.thumb.jpg",
-                "displayLink": "example.com",
-            }
-            for i in range(1, num_results + 1)
-        ]
+raise ImportError("Test archived: see deprecated/tests/test_intelligent_query_images.py")
 
 
 class DummyImageAnalyzerResult:

@@ -23,7 +23,7 @@ class QuestionAnalyzerClient:
         Initialize Question Analyzer
         
         Args:
-            llm_client: LLM client for intelligent analysis (e.g., GPTOSSClient) - REQUIRED
+            llm_client: LLM client for intelligent analysis (e.g., VLLMClient) - REQUIRED
         """
         if not llm_client:
             raise ValueError("LLM client is required for Question Analyzer")

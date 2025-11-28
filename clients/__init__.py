@@ -4,6 +4,7 @@ Client modules for external services
 
 from .lm_studio_client import LMStudioClient
 from .google_search_client import GoogleCustomSearchClient
+from .vllm_client import VLLMClient
 # WebScraperClient, EmbeddingClient, and MilvusClient are imported lazily to avoid slow dependency loading
 # from .web_scraper_client import WebScraperClient
 # from .embedding_client import EmbeddingClient
@@ -12,6 +13,7 @@ from .google_search_client import GoogleCustomSearchClient
 __all__ = [
     "LMStudioClient",
     "GoogleCustomSearchClient",
+    "VLLMClient",
     # "WebScraperClient",  # Import directly when needed
     # "EmbeddingClient",  # Import directly when needed
     # "MilvusClient",  # Import directly when needed
