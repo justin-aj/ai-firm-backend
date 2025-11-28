@@ -1,68 +1,3 @@
-# Multimodal Retrieval-Augmented Generation (Multimodal RAG)
-
-## Overview
-Multimodal RAG is a modular Python backend for advanced knowledge retrieval and synthesis. It supports both text and visual (image/video) queries, combining state-of-the-art search, analysis, and generation to deliver context-rich answers for research and production use.
-
-## Features
-- **Multimodal Reasoning:** Integrates large language models (LLMs) and vision-language models (VLMs) for text, image, and video understanding.
-- **Retrieval-Augmented Generation:** Uses vector databases to retrieve relevant context and enhance generated responses.
-- **Batch Inference:** Efficiently processes multiple queries and images in parallel.
-- **Extensible Architecture:** Modular clients for easy integration of new models and data sources.
-- **Configurable Performance:** Supports single and multi-GPU setups for scalable deployment.
-
-## Architecture
-```
-User Query (text/image/video)
-        ↓
-Search & Scraping (Google, Web, Images)
-        ↓
-Visual Analysis (Qwen3-VL, VLM)
-        ↓
-Embedding & Storage (Milvus Vector DB)
-        ↓
-Context Retrieval & Synthesis (LLM, VLM)
-        ↓
-Final Response
-```
-
-## Key Components
-- **LLM Client:** vLLM-based large language model inference.
-- **Vision-Language Model Client:** Qwen3-VL for multimodal analysis.
-- **Image Analysis:** Combines Google Image Search and VLM for intelligent image understanding.
-- **Web Scraping:** Enriches context with real-time web data.
-- **Vector Database:** Milvus for storing and retrieving embeddings.
-- **Question Analysis:** Decomposes and interprets user queries.
-- **Embeddings:** Generates BGE-M3 and other embeddings for semantic search.
-
-## Orchestration & Routing
-- **Ingestion Orchestrator:** Manages data collection from web, search, and visual sources.
-- **Intelligent Query Service:** Handles multimodal queries and returns synthesized results.
-- **Synthesis Service:** Combines retrieved knowledge and generated content.
-- **Retrieval Service:** Interfaces with the vector database for context retrieval.
-
-## Technologies
-- Python 3.x
-- vLLM (LLM inference)
-- Qwen3-VL (Vision-Language Model)
-- Milvus (Vector Database)
-- Google Custom Search
-- Crawl4AI (Web Scraping)
-- BGE-M3 (Embeddings)
-
-## Current State
-The active codebase focuses on multimodal retrieval, analysis, and synthesis. All legacy FastAPI/MCP/server code is safely archived. Tests validate all core features.
-
----
-
-## Sample Input & Output
-
-### Input
-```
-Question: Explain the architecture of the Triton Inference Server
-```
-
-### Output (Markdown Report)
-```markdown
 # Image Analysis Report #1
 
 **Generated:** 2025-11-27 22:25:10
@@ -81,12 +16,13 @@ Question: Explain the architecture of the Triton Inference Server
 
 ## VLM Analysis (Image Description)
 
-
 The architecture diagram depicts the interaction between various components of an NVIDIA Triton Inference Server system. At the top, client applications, which can be desktops, laptops, or mobile devices, communicate with the server through either HTTP or gRPC protocols using a Python/C++ client library. These client applications can also directly link to the C API for more direct control.  The model repository, stored in a persistent volume, houses the models that are managed by the model management component. This component orchestrates the loading and distribution of models across the available GPUs and CPUs.  Inference requests from clients are processed by the inference request module, which communicates with the per-model scheduler queues. The scheduler, responsible for orchestrating the execution of models, distributes tasks to the appropriate framework backends. The framework backends support various machine learning frameworks such as TensorFlow, ONNX, PyTorch, and custom models. Each backend loads and executes the corresponding model, generating inference responses.  These responses are then sent back to the inference response module, which aggregates them and communicates them back to the client application. Additionally, status and health metrics are exported through HTTP, providing real-time monitoring of the system's performance and health.  The system is designed to efficiently manage multiple models and their associated resources, ensuring optimal performance and scalability. The use of GPUs and CPUs allows for parallel processing, enhancing the speed and efficiency of model inference. The integration of various machine learning frameworks ensures compatibility and flexibility in model deployment.
 
 ---
 
 ## Synthesized Answer
+
+ 
 
 ANSWER:
 
@@ -106,4 +42,5 @@ References:
 
 NVIDIA. (2022). NVIDIA Triton Inference Server User Guide. Retrieved from <https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/index.html>
 
-```
+NVIDIA. (2022). NVIDIA Triton Inference Server Architecture. Retrieved from <
+
