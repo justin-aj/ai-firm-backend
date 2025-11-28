@@ -1,7 +1,7 @@
 # Multimodal Retrieval-Augmented Generation (Multimodal RAG)
 
 ## Overview
-Multimodal RAG is a modular Python backend for advanced knowledge retrieval and synthesis. It supports both text and visual (image/video) queries, combining state-of-the-art search, analysis, and generation to deliver context-rich answers for research and production use.
+Multimodal RAG is a modular Python backend that generates rich Markdown reports in response to user questions. For each input query, the system retrieves relevant images, analyzes them using vision-language models, and synthesizes a detailed answer. The output is a Markdown file containing the original question, embedded images, image descriptions, and a context-aware answer—ideal for technical documentation, research, and knowledge sharing.
 
 ## Features
 - **Multimodal Reasoning:** Integrates large language models (LLMs) and vision-language models (VLMs) for text, image, and video understanding.
@@ -62,7 +62,7 @@ Question: Explain the architecture of the Triton Inference Server
 ```
 
 ### Output (Markdown Report)
-```markdown
+
 # Image Analysis Report #1
 
 **Generated:** 2025-11-27 22:25:10
@@ -106,4 +106,4 @@ References:
 
 NVIDIA. (2022). NVIDIA Triton Inference Server User Guide. Retrieved from <https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/index.html>
 
-```
+
