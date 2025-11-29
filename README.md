@@ -22,8 +22,6 @@ Search & Scraping (Google, Web, Images)
         ↓
 Visual Analysis (Qwen3-VL, VLM)
         ↓
-Code Analysis (Eagle, Speculative Coding)
-        ↓
 Embedding & Storage (Milvus Vector DB)
         ↓
 Context Retrieval & Synthesis (LLM, VLM)
