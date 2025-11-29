@@ -3,26 +3,32 @@
 ## Overview
 Multimodal RAG is a modular Python backend that generates rich Markdown reports in response to user questions. For each input query, the system retrieves relevant images, analyzes them using vision-language models, and synthesizes a detailed answer. The output is a Markdown file containing the original question, embedded images, image descriptions, and a context-aware answer—ideal for technical documentation, research, and knowledge sharing.
 
+The system also integrates advanced features such as Eagle for code analysis, speculative coding for rapid prototyping, and other state-of-the-art tools to enhance reasoning, retrieval, and synthesis workflows.
+
 ## Features
 - **Multimodal Reasoning:** Integrates large language models (LLMs) and vision-language models (VLMs) for text, image, and video understanding.
 - **Retrieval-Augmented Generation:** Uses vector databases to retrieve relevant context and enhance generated responses.
 - **Batch Inference:** Efficiently processes multiple queries and images in parallel.
 - **Extensible Architecture:** Modular clients for easy integration of new models and data sources.
 - **Configurable Performance:** Supports single and multi-GPU setups for scalable deployment.
+- **Eagle Integration:** Advanced code analysis and visualization for technical queries.
+- **Speculative Coding:** Rapid prototyping and hypothesis testing for code-related questions.
 
 ## Architecture
 ```
-User Query (text/image/video)
+User Query (text/image/video/code)
         ↓
 Search & Scraping (Google, Web, Images)
         ↓
 Visual Analysis (Qwen3-VL, VLM)
         ↓
+Code Analysis (Eagle, Speculative Coding)
+        ↓
 Embedding & Storage (Milvus Vector DB)
         ↓
 Context Retrieval & Synthesis (LLM, VLM)
         ↓
-Final Response
+Final Response (Markdown Report)
 ```
 
 ## Key Components
@@ -33,9 +39,11 @@ Final Response
 - **Vector Database:** Milvus for storing and retrieving embeddings.
 - **Question Analysis:** Decomposes and interprets user queries.
 - **Embeddings:** Generates BGE-M3 and other embeddings for semantic search.
+- **Eagle Client:** Provides code analysis and visualization.
+- **Speculative Coding Engine:** Enables rapid code prototyping and hypothesis testing.
 
 ## Orchestration & Routing
-- **Ingestion Orchestrator:** Manages data collection from web, search, and visual sources.
+- **Ingestion Orchestrator:** Manages data collection from web, search, visual, and code sources.
 - **Intelligent Query Service:** Handles multimodal queries and returns synthesized results.
 - **Synthesis Service:** Combines retrieved knowledge and generated content.
 - **Retrieval Service:** Interfaces with the vector database for context retrieval.
@@ -48,9 +56,11 @@ Final Response
 - Google Custom Search
 - Crawl4AI (Web Scraping)
 - BGE-M3 (Embeddings)
+- Eagle (Code Analysis)
+- Speculative Coding Engine
 
 ## Current State
-The active codebase focuses on multimodal retrieval, analysis, and synthesis. All legacy FastAPI/MCP/server code is safely archived. Tests validate all core features.
+The active codebase focuses on multimodal retrieval, analysis, synthesis, and code reasoning. All legacy FastAPI/MCP/server code is safely archived. Tests validate all core features.
 
 ---
 
