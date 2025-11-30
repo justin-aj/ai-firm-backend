@@ -1,7 +1,7 @@
-# Multimodal Retrieval-Augmented Generation (Multimodal RAG)
+# Multimodal Answer Engine (Intelligent RAG)
 
 ## Overview
-Multimodal RAG is a modular Python backend that generates rich Markdown reports in response to user questions. For each input query, the system retrieves relevant images, analyzes them using vision-language models, and synthesizes a detailed answer. The output is a Markdown file containing the original question, embedded images, image descriptions, and a context-aware answer ideal for technical documentation, research, and knowledge sharing.
+Multimodal Answer Engine is a modular Python backend that generates rich Markdown reports in response to user questions. For each input query, the system retrieves relevant images, analyzes them using vision-language models, and synthesizes a detailed answer. The output is a Markdown file containing the original question, embedded images, image descriptions, and a context-aware answer ideal for technical documentation, research, and knowledge sharing.
 
 The system also integrates advanced features such as Eagle for code analysis, speculative coding for rapid prototyping, and other state-of-the-art tools to enhance reasoning, retrieval, and synthesis workflows.
 
