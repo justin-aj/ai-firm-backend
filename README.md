@@ -47,8 +47,6 @@ NVIDIA. (2022). NVIDIA Triton Inference Server User Guide. Retrieved from <https
 - **Eagle Integration:** Advanced code analysis and visualization for technical queries.
 - **Speculative Coding:** Rapid prototyping and hypothesis testing for code-related questions.
 
-```
-
 ## Key Components
 - **LLM Client:** vLLM-based large language model inference.
 - **Vision-Language Model Client:** Qwen3-VL for multimodal analysis.
